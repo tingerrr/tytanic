@@ -44,6 +44,10 @@ ci:
 	@echo These checks are not exactly the same as CI, but should get you there most of the way.
 	@echo ""
 
+# build the docker image
+docker:
+	docker build . --tag 'typst-test:latest'
+
 # clean all temporary directories and build artifacts
 clean:
 	rm -r target
