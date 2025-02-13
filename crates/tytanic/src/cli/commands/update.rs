@@ -1,14 +1,16 @@
+use std::io::Write;
+
 use color_eyre::eyre;
 use tytanic_core::doc::render::{self, Origin};
-use tytanic_core::dsl;
 use tytanic_core::suite::Filter;
+use tytanic_core::{dsl, Id};
 use tytanic_filter::eval;
 
 use super::{
     CompileOptions, Context, Direction, ExportOptions, FilterOptions, OptionDelegate,
     RunnerOptions, Switch,
 };
-use crate::cli::{TestFailure, CANCELLED};
+use crate::cli::{OperationFailure, TestFailure, CANCELLED};
 use crate::report::Reporter;
 use crate::runner::{Action, Runner, RunnerConfig};
 
@@ -34,7 +36,14 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
         Filter::TestSet(set) => Filter::TestSet(
             set.map(|set| eval::Set::expr_inter(set, dsl::built_in::persistent(), [])),
         ),
-        Filter::Explicit(explicit) => Filter::Explicit(explicit),
+        Filter::Explicit(explicit) => {
+            if explicit.contains(&Id::template()) {
+                writeln!(ctx.ui.error()?, "Cannot update template test")?;
+                eyre::bail!(OperationFailure);
+            }
+
+            Filter::Explicit(explicit)
+        }
     };
 
     let suite = ctx.collect_tests_with_filter(&project, filter)?;

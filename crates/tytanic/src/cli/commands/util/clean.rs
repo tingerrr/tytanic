@@ -11,10 +11,10 @@ pub fn run(ctx: &mut Context) -> eyre::Result<()> {
     let project = ctx.project()?;
     let suite = ctx.collect_tests(&project)?;
 
-    let len = suite.tests().len();
-
-    for test in suite.tests().values() {
+    let mut len = 0;
+    for test in suite.unit_tests() {
         test.delete_temporary_directories(&project)?;
+        len += 1;
     }
 
     let mut w = ctx.ui.stderr();

@@ -21,6 +21,8 @@ The following functions are available, they can be written out in place of any e
 |`none()`|Includes no tests.|
 |`all()`|Includes all tests.|
 |`skip()`|Includes tests with a skip annotation|
+|`unit()`|Includes unit tests|
+|`template()`|Includes template tests|
 |`compile-only()`|Includes tests without references.|
 |`ephemeral()`|Includes tests with ephemeral references.|
 |`persistent()`|Includes tests with persistent references.|

@@ -10,7 +10,7 @@ pub mod test;
 
 pub use project::Project;
 pub use suite::{FilteredSuite, Suite};
-pub use test::{Id, Test};
+pub use test::{Id, TemplateTest, UnitTest};
 
 #[cfg(test)]
 mod _dev;
