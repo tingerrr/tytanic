@@ -4,10 +4,9 @@ use color_eyre::eyre;
 use termcolor::Color;
 use tytanic_utils::fmt::Term;
 
+use super::Context;
 use crate::cli::OperationFailure;
 use crate::cwrite;
-
-use super::Context;
 
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "util-vcs-args")]
@@ -36,10 +35,10 @@ impl Command {
 
                 let suite = ctx.collect_tests(&project)?;
 
-                let len = suite.tests().len();
-
-                for test in suite.tests().values() {
+                let mut len = 0;
+                for test in suite.unit_tests() {
                     vcs.ignore(&project, test)?;
+                    len += 1;
                 }
 
                 let mut w = ctx.ui.stderr();

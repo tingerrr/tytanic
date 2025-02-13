@@ -1,8 +1,9 @@
 # Unit tests
 Unit tests are those tests found in their own directory identified by a `test.typ` script and are located in `tests`.
 
-unit tests are the only tests which have access to an extended Typst standard library.
+Unit tests are the only tests which have access to an extended Typst standard library.
 This [test library](./lib.md) contains modules and functions to thoroughly test both the success and failure paths of your project.
+Note that tests with a `template` [annotation] cannot use this augmented library, instead they get access to the contents of a package's template directory.
 
 ## Test kinds
 There are three kinds of unit tests:
@@ -58,3 +59,5 @@ These values can be tweaked on the command line using the `--max-deviations` and
 - `--min-delta` takes a byte, i.e. any value from `0` to `255`.
 
 Both values default to `0` such that any difference will trigger a failure by default.
+
+[annotation]: ./annotations.md

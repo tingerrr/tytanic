@@ -2,6 +2,7 @@
 //! fields for test templates, custom test set bindings and other information
 //! necessary for managing, filtering and running tests.
 
+use std::collections::btree_map;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -13,7 +14,9 @@ use tytanic_utils::fmt::Term;
 use uuid::Uuid;
 
 use crate::project::Project;
-use crate::test::{Id, LoadError, ParseIdError, Test, TestResult};
+use crate::test::unit::LoadError;
+use crate::test::{Id, ParseIdError, Test, TestResult, UnitTest};
+use crate::TemplateTest;
 
 /// A suite of tests.
 #[derive(Debug, Clone)]
@@ -37,6 +40,10 @@ impl Suite {
         let root = project.unit_tests_root();
 
         let mut this = Self::new();
+
+        if let Some(test) = TemplateTest::load(project) {
+            this.tests.insert(test.id().clone(), Test::Template(test));
+        }
 
         match root.read_dir() {
             Ok(read_dir) => {
@@ -75,7 +82,7 @@ impl Suite {
 
         for id in all.intersection(&without_leafs) {
             if let Some((id, test)) = this.tests.remove_entry(id.as_str()) {
-                this.nested.insert(id, test);
+                this.tests.insert(id, test);
             }
         }
 
@@ -90,9 +97,9 @@ impl Suite {
 
         let id = Id::new_from_path(dir)?;
 
-        if let Some(test) = Test::load(project, id.clone())? {
+        if let Some(test) = UnitTest::load(project, id.clone())? {
             tracing::debug!(id = %test.id(), "collected test");
-            self.tests.insert(id, test);
+            self.tests.insert(id, Test::Unit(test));
         }
 
         for entry in fs::read_dir(&abs)? {
@@ -114,37 +121,73 @@ impl Suite {
 }
 
 impl Suite {
-    /// The unit tests in this suite.
-    pub fn tests(&self) -> &BTreeMap<Id, Test> {
-        &self.tests
+    /// The tests in this suite.
+    pub fn tests(&self) -> Tests<'_> {
+        Tests {
+            iter: self.tests.values(),
+        }
     }
 
-    /// The nested tests, those which contain other tests and need to be migrated.
+    /// The unit tests in this suite.
+    pub fn unit_tests(&self) -> UnitTests<'_> {
+        UnitTests { iter: self.tests() }
+    }
+
+    /// The template test, if it exists.
+    pub fn template_test(&self) -> Option<&TemplateTest> {
+        self.tests.get(&Id::template()).map(|test| {
+            test.as_template_test()
+                .expect("Suite invariant ensures that this is a TemplateTest")
+        })
+    }
+
+    /// The nested tests, those which contain other tests and need to be
+    /// migrated.
     ///
     /// This is a temporary method and will be removed in a future release.
     pub fn nested(&self) -> &BTreeMap<Id, Test> {
         &self.nested
+    }
+
+    /// Returns the test with the given id.
+    pub fn get(&self, id: &Id) -> Option<&Test> {
+        self.tests.get(id)
+    }
+
+    /// Returns true if a test is contained in this suite.
+    pub fn contains(&self, id: &Id) -> bool {
+        self.tests.contains_key(id)
+    }
+
+    /// Returns the total number of tests in this suite.
+    pub fn len(&self) -> usize {
+        self.tests.len()
+    }
+
+    /// Whether this suite is empty.
+    pub fn is_empty(&self) -> bool {
+        self.tests.len() == 0
     }
 }
 
 impl Suite {
     /// Apply a filter to a suite.
     pub fn filter(self, filter: Filter) -> Result<FilteredSuite, FilterError> {
+        let mut filtered = Suite::new();
+        let mut matched = Suite::new();
+
         match &filter {
             Filter::TestSet(expr) => {
-                let mut matched = BTreeMap::new();
-                let mut filtered = BTreeMap::new();
-
                 for (id, test) in &self.tests {
                     if expr.contains(test)? {
-                        matched.insert(id.clone(), test.clone());
+                        matched.tests.insert(id.clone(), test.clone());
                     } else {
-                        filtered.insert(id.clone(), test.clone());
+                        filtered.tests.insert(id.clone(), test.clone());
                     }
                 }
 
                 Ok(FilteredSuite {
-                    suite: self,
+                    raw: self,
                     filter,
                     matched,
                     filtered,
@@ -152,13 +195,12 @@ impl Suite {
             }
             Filter::Explicit(set) => {
                 let mut tests = self.tests.clone();
-                let mut matched = BTreeMap::new();
                 let mut missing = BTreeSet::new();
 
                 for id in set {
                     match tests.remove_entry(id) {
                         Some((id, test)) => {
-                            matched.insert(id, test);
+                            matched.tests.insert(id, test);
                         }
                         None => {
                             missing.insert(id.clone());
@@ -170,11 +212,13 @@ impl Suite {
                     return Err(FilterError::Missing(missing));
                 }
 
+                filtered.tests = tests;
+
                 Ok(FilteredSuite {
-                    suite: self,
+                    raw: self,
                     filter,
                     matched,
-                    filtered: tests,
+                    filtered,
                 })
             }
         }
@@ -184,6 +228,49 @@ impl Suite {
 impl Default for Suite {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<'s> IntoIterator for &'s Suite {
+    type IntoIter = Tests<'s>;
+    type Item = &'s Test;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.tests()
+    }
+}
+
+/// Returned by [`Suite::tests`].
+#[derive(Debug)]
+pub struct Tests<'s> {
+    iter: btree_map::Values<'s, Id, Test>,
+}
+
+impl<'s> Iterator for Tests<'s> {
+    type Item = &'s Test;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+/// Returned by [`Suite::unit_tests`].
+#[derive(Debug)]
+pub struct UnitTests<'s> {
+    iter: Tests<'s>,
+}
+
+impl<'s> Iterator for UnitTests<'s> {
+    type Item = &'s UnitTest;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for test in self.iter.by_ref() {
+            if let Test::Unit(test) = test {
+                return Some(test);
+            }
+        }
+
+        None
     }
 }
 
@@ -201,16 +288,16 @@ pub enum Filter {
 /// A suite of tests with a filter applied to it.
 #[derive(Debug, Clone)]
 pub struct FilteredSuite {
-    suite: Suite,
+    raw: Suite,
     filter: Filter,
-    matched: BTreeMap<Id, Test>,
-    filtered: BTreeMap<Id, Test>,
+    matched: Suite,
+    filtered: Suite,
 }
 
 impl FilteredSuite {
     /// The unfiltered inner suite.
-    pub fn suite(&self) -> &Suite {
-        &self.suite
+    pub fn inner(&self) -> &Suite {
+        &self.raw
     }
 
     /// The filter that was used to filter the tests.
@@ -218,13 +305,13 @@ impl FilteredSuite {
         &self.filter
     }
 
-    /// The matched tests, i.e. those which _weren't_ filtered out.
-    pub fn matched(&self) -> &BTreeMap<Id, Test> {
+    /// The matched suite, contains only those test which _weren't_ filtered out.
+    pub fn matched(&self) -> &Suite {
         &self.matched
     }
 
-    /// The filtered tests, i.e. those which _were_ filtered out.
-    pub fn filtered(&self) -> &BTreeMap<Id, Test> {
+    /// The filtered suite, contains only those test which _were_ filtered out.
+    pub fn filtered(&self) -> &Suite {
         &self.filtered
     }
 }
@@ -283,7 +370,7 @@ impl SuiteResult {
     pub fn new(suite: &FilteredSuite) -> Self {
         Self {
             id: Uuid::new_v4(),
-            total: suite.suite().tests().len(),
+            total: suite.inner().len(),
             filtered: suite.filtered().len(),
             passed: 0,
             failed: 0,
@@ -291,13 +378,13 @@ impl SuiteResult {
             duration: Duration::ZERO,
             results: suite
                 .matched()
-                .keys()
-                .map(|id| (id.clone(), TestResult::skipped()))
+                .tests()
+                .map(|test| (test.id().clone(), TestResult::skipped()))
                 .chain(
                     suite
                         .filtered()
-                        .keys()
-                        .map(|id| (id.clone(), TestResult::filtered())),
+                        .tests()
+                        .map(|test| (test.id().clone(), TestResult::filtered())),
                 )
                 .collect(),
         }
@@ -412,7 +499,8 @@ mod tests {
     use tytanic_utils::fs::TempTestEnv;
 
     use super::*;
-    use crate::test::{Annotation, Kind};
+    use crate::test::unit::Kind;
+    use crate::test::Annotation;
 
     #[test]
     fn test_collect() {
@@ -449,7 +537,9 @@ mod tests {
                 ];
 
                 for (key, kind, annotations) in tests {
-                    let test = &suite.tests[key];
+                    let Test::Unit(test) = &suite.tests[key] else {
+                        panic!("not testing template here");
+                    };
                     assert_eq!(test.annotations(), &annotations[..]);
                     assert_eq!(test.kind(), kind);
                 }

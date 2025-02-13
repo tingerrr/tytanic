@@ -9,7 +9,7 @@ use std::fmt::{self, Debug, Display};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-use crate::test::Test;
+use crate::test::UnitTest;
 
 use super::Project;
 
@@ -85,7 +85,7 @@ impl Vcs {
     }
 
     /// Ignore all ephemeral files and directories of a test.
-    pub fn ignore(&self, project: &Project, test: &Test) -> io::Result<()> {
+    pub fn ignore(&self, project: &Project, test: &UnitTest) -> io::Result<()> {
         let mut content = format!("{IGNORE_HEADER}\n\n");
 
         let file = project.unit_test_dir(test.id()).join(match self.kind {
@@ -109,7 +109,7 @@ impl Vcs {
         Ok(())
     }
 
-    pub fn unignore(&self, project: &Project, test: &Test) -> io::Result<()> {
+    pub fn unignore(&self, project: &Project, test: &UnitTest) -> io::Result<()> {
         let file = project.unit_test_dir(test.id()).join(match self.kind {
             Kind::Git => GITIGNORE_NAME,
             Kind::Mercurial => HGIGNORE_NAME,
@@ -133,10 +133,12 @@ mod tests {
     use tytanic_utils::fs::TempTestEnv;
 
     use super::*;
-    use crate::test::{Id, Kind as TestKind};
+    use crate::project::Project;
+    use crate::test::unit::Kind as TestKind;
+    use crate::test::Id;
 
-    fn test(kind: TestKind) -> Test {
-        Test::new_test(Id::new("fancy").unwrap(), kind)
+    fn test(kind: TestKind) -> UnitTest {
+        UnitTest::new_test(Id::new("fancy").unwrap(), kind)
     }
 
     #[test]
