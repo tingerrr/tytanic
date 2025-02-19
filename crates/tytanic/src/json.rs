@@ -5,12 +5,13 @@ use typst_syntax::package::{PackageManifest, PackageVersion};
 use tytanic_core::project::Project;
 use tytanic_core::suite::Suite;
 use tytanic_core::test::Test;
+use tytanic_core::{TemplateTest, UnitTest};
 
 #[derive(Debug, Serialize)]
 pub struct ProjectJson<'m, 's> {
     pub package: Option<PackageJson<'m>>,
     pub vcs: Option<String>,
-    pub tests: Vec<TestJson<'s>>,
+    pub tests: Vec<UnitTestJson<'s>>,
     pub is_template: bool,
 }
 
@@ -22,7 +23,7 @@ impl<'m, 's> ProjectJson<'m, 's> {
                 version: &m.package.version,
             }),
             vcs: project.vcs().map(|vcs| vcs.to_string()),
-            tests: suite.tests().values().map(TestJson::new).collect(),
+            tests: suite.unit_tests().map(UnitTestJson::new).collect(),
             is_template: manifest.and_then(|m| m.template.as_ref()).is_some(),
         }
     }
@@ -35,18 +36,50 @@ pub struct PackageJson<'p> {
 }
 
 #[derive(Debug, Serialize)]
-pub struct TestJson<'t> {
+#[serde(tag = "type", content = "test")]
+pub enum TestJson<'t> {
+    #[serde(rename = "unit")]
+    Unit(UnitTestJson<'t>),
+
+    #[serde(rename = "template")]
+    Template(TemplateTestJson<'t>),
+}
+
+impl<'t> TestJson<'t> {
+    pub fn new(test: &'t Test) -> Self {
+        match test {
+            Test::Unit(test) => Self::Unit(UnitTestJson::new(test)),
+            Test::Template(test) => Self::Template(TemplateTestJson::new(test)),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct UnitTestJson<'t> {
     pub id: &'t str,
     pub kind: &'static str,
     pub is_skip: bool,
 }
 
-impl<'t> TestJson<'t> {
-    pub fn new(test: &'t Test) -> Self {
+impl<'t> UnitTestJson<'t> {
+    pub fn new(test: &'t UnitTest) -> Self {
         Self {
             id: test.id().as_str(),
             kind: test.kind().as_str(),
             is_skip: test.is_skip(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct TemplateTestJson<'t> {
+    pub id: &'t str,
+}
+
+impl<'t> TemplateTestJson<'t> {
+    pub fn new(test: &'t TemplateTest) -> Self {
+        Self {
+            id: test.id().as_str(),
         }
     }
 }

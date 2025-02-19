@@ -45,7 +45,7 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
     let mut mappings = BTreeMap::new();
     for old in suite.nested().keys() {
         let new = Id::new(format!("{old}/{}", args.name))?;
-        let collision = suite.tests().contains_key(&new);
+        let collision = suite.contains(&new);
 
         has_colission |= collision;
         mappings.insert(old.clone(), (new, collision));

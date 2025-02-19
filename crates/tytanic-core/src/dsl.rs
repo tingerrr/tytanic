@@ -27,6 +27,8 @@ pub fn context() -> Context<Test> {
         ("all", built_in::all_ctor as FuncPtr),
         ("none", built_in::none_ctor),
         ("skip", built_in::skip_ctor),
+        ("unit", built_in::unit_ctor),
+        ("template", built_in::template_ctor),
         ("compile-only", built_in::compile_only_ctor),
         ("ephemeral", built_in::ephemeral_ctor),
         ("persistent", built_in::persistent_ctor),
@@ -76,10 +78,35 @@ pub mod built_in {
         Ok(Value::Set(skip()))
     }
 
-    /// Constructs the `skip()` test set. A test set which contains all tests marked
-    /// with the `skip` annotation.
+    /// Constructs the `skip()` test set. A test set which contains all tests
+    /// marked with the `skip` annotation.
     pub fn skip() -> Set<Test> {
-        Set::new(|_, test: &Test| Ok(test.is_skip()))
+        Set::new(|_, test: &Test| Ok(test.as_unit_test().is_some_and(|unit| unit.is_skip())))
+    }
+
+    /// The constructor function for the test set returned by [`unit`].
+    ///
+    /// [`unit`]: unit()
+    pub fn unit_ctor(ctx: &Context<Test>, args: &[Value<Test>]) -> Result<Value<Test>, Error> {
+        Func::expect_no_args("unit", ctx, args)?;
+        Ok(Value::Set(unit()))
+    }
+
+    /// Constructs the `unit()` test set. A test set which contains all unit tests.
+    pub fn unit() -> Set<Test> {
+        Set::new(|_, test: &Test| Ok(test.as_unit_test().is_some()))
+    }
+
+    /// The constructor function for the test set returned by [`template`].
+    pub fn template_ctor(ctx: &Context<Test>, args: &[Value<Test>]) -> Result<Value<Test>, Error> {
+        Func::expect_no_args("template", ctx, args)?;
+        Ok(Value::Set(template()))
+    }
+
+    /// Constructs the `template()` test set. A test set which contains all
+    /// template tests.
+    pub fn template() -> Set<Test> {
+        Set::new(|_, test: &Test| Ok(test.as_template_test().is_some()))
     }
 
     /// The constructor function for the test set returned by [`compile_only`].
@@ -92,9 +119,13 @@ pub mod built_in {
     }
 
     /// Constructs the `compile-only()` test set. A test set which contains all
-    /// `compile-only` tests.
+    /// `compile-only` unit tests.
     pub fn compile_only() -> Set<Test> {
-        Set::new(|_, test: &Test| Ok(test.kind().is_compile_only()))
+        Set::new(|_, test: &Test| {
+            Ok(test
+                .as_unit_test()
+                .is_some_and(|unit| unit.kind().is_compile_only()))
+        })
     }
 
     /// The constructor function for the test set returned by [`ephemeral`].
@@ -104,9 +135,13 @@ pub mod built_in {
     }
 
     /// Constructs the `ephemeral()` test set. A test set which contains all
-    /// `ephemeral` tests.
+    /// `ephemeral` unit tests.
     pub fn ephemeral() -> Set<Test> {
-        Set::new(|_, test: &Test| Ok(test.kind().is_ephemeral()))
+        Set::new(|_, test: &Test| {
+            Ok(test
+                .as_unit_test()
+                .is_some_and(|unit| unit.kind().is_ephemeral()))
+        })
     }
 
     /// The constructor function for the test set returned by [`persistent`].
@@ -119,8 +154,12 @@ pub mod built_in {
     }
 
     /// Constructs the `persistent()` test set. A test set which contains all
-    /// `persistent` tests.
+    /// `persistent` unit tests.
     pub fn persistent() -> Set<Test> {
-        Set::new(|_, test: &Test| Ok(test.kind().is_persistent()))
+        Set::new(|_, test: &Test| {
+            Ok(test
+                .as_unit_test()
+                .is_some_and(|unit| unit.kind().is_persistent()))
+        })
     }
 }

@@ -166,7 +166,7 @@ impl Context<'_> {
     ) -> eyre::Result<FilteredSuite> {
         let suite = self.collect_tests(project)?;
 
-        if suite.tests().is_empty() {
+        if suite.is_empty() {
             writeln!(self.ui.warn()?, "Suite is empty")?;
         }
 

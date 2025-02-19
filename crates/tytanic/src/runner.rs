@@ -12,7 +12,9 @@ use tytanic_core::doc::render::{self, Origin};
 use tytanic_core::doc::{compile, Document};
 use tytanic_core::project::Project;
 use tytanic_core::suite::{FilteredSuite, SuiteResult};
-use tytanic_core::test::{Annotation, Kind, Test, TestResult};
+use tytanic_core::test::unit::Kind;
+use tytanic_core::test::{Annotation, Test, TestResult};
+use tytanic_core::{TemplateTest, UnitTest};
 
 use crate::cli::TestFailure;
 use crate::report::Reporter;
@@ -89,8 +91,16 @@ impl<'c, 'p> Runner<'c, 'p> {
         }
     }
 
-    pub fn test<'s>(&'s self, test: &'p Test) -> TestRunner<'c, 's, 'p> {
-        TestRunner {
+    pub fn unit_test<'s>(&'s self, test: &'p UnitTest) -> UnitTestRunner<'c, 's, 'p> {
+        UnitTestRunner {
+            project_runner: self,
+            test,
+            result: TestResult::skipped(),
+        }
+    }
+
+    pub fn template_test<'s>(&'s self, test: &'p TemplateTest) -> TemplateTestRunner<'c, 's, 'p> {
+        TemplateTestRunner {
             project_runner: self,
             test,
             result: TestResult::skipped(),
@@ -100,12 +110,15 @@ impl<'c, 'p> Runner<'c, 'p> {
     pub fn run_inner(&mut self, reporter: &Reporter) -> eyre::Result<()> {
         reporter.report_status(&self.result)?;
 
-        for (id, test) in self.suite.matched() {
+        for test in self.suite.matched() {
             if self.config.cancellation.load(Ordering::SeqCst) {
                 return Ok(());
             }
 
-            let result = self.test(test).run()?;
+            let result = match test {
+                Test::Unit(test) => self.unit_test(test).run()?,
+                Test::Template(test) => self.template_test(test).run()?,
+            };
 
             reporter.clear_status()?;
 
@@ -113,13 +126,13 @@ impl<'c, 'p> Runner<'c, 'p> {
             reporter.report_test_result(test, &result)?;
 
             if result.is_fail() && self.config.fail_fast {
-                self.result.set_test_result(id.clone(), result);
+                self.result.set_test_result(test.id().clone(), result);
                 return Ok(());
             }
 
             reporter.report_status(&self.result)?;
 
-            self.result.set_test_result(id.clone(), result);
+            self.result.set_test_result(test.id().clone(), result);
         }
 
         reporter.clear_status()?;
@@ -140,13 +153,13 @@ impl<'c, 'p> Runner<'c, 'p> {
     }
 }
 
-pub struct TestRunner<'c, 's, 'p> {
+pub struct UnitTestRunner<'c, 's, 'p> {
     project_runner: &'s Runner<'c, 'p>,
-    test: &'p Test,
+    test: &'p UnitTest,
     result: TestResult,
 }
 
-impl TestRunner<'_, '_, '_> {
+impl UnitTestRunner<'_, '_, '_> {
     fn run_inner(&mut self) -> eyre::Result<()> {
         // TODO(tinger): don't exit early if there are still exports possible
 
@@ -493,5 +506,86 @@ impl TestRunner<'_, '_, '_> {
         self.result.set_passed_comparison();
 
         Ok(())
+    }
+}
+
+pub struct TemplateTestRunner<'c, 's, 'p> {
+    project_runner: &'s Runner<'c, 'p>,
+    test: &'p TemplateTest,
+    result: TestResult,
+}
+
+impl TemplateTestRunner<'_, '_, '_> {
+    // TODO: suite, different world root and lookup behavior
+    fn run_inner(&mut self) -> eyre::Result<()> {
+        match self.project_runner.config.action {
+            Action::Run {
+                // export_ephemeral: export,
+                ..
+            } => {
+                let output = self.load_template_src()?;
+                let _output = self.compile_template(output)?;
+
+                // if export {
+                //     let output = self.render_template_doc(output)?;
+                //     self.export_out_doc(&output)?;
+                // }
+            }
+            Action::Update { .. } => eyre::bail!("attempted to update template test"),
+        }
+
+        Ok(())
+    }
+
+    pub fn run(mut self) -> eyre::Result<TestResult> {
+        self.result.start();
+        self.prepare()?;
+        let res = self.run_inner();
+        self.cleanup()?;
+        self.result.end();
+
+        if let Err(err) = res {
+            if !err.chain().any(|s| s.is::<TestFailure>()) {
+                eyre::bail!(err);
+            }
+        }
+
+        Ok(self.result)
+    }
+
+    pub fn prepare(&mut self) -> eyre::Result<()> {
+        Ok(())
+    }
+
+    pub fn cleanup(&mut self) -> eyre::Result<()> {
+        Ok(())
+    }
+
+    pub fn load_template_src(&mut self) -> eyre::Result<Source> {
+        tracing::trace!(test = ?self.test.id(), "loading template source");
+        Ok(self.test.load_source(self.project_runner.project)?)
+    }
+
+    pub fn compile_template(&mut self, source: Source) -> eyre::Result<PagedDocument> {
+        let Warned { output, warnings } = compile::compile(
+            source,
+            self.project_runner.world,
+            self.project_runner.config.warnings,
+        );
+
+        self.result.set_warnings(warnings);
+
+        let doc = match output {
+            Ok(doc) => {
+                self.result.set_passed_compilation();
+                doc
+            }
+            Err(err) => {
+                self.result.set_failed_test_compilation(err);
+                eyre::bail!(TestFailure);
+            }
+        };
+
+        Ok(doc)
     }
 }

@@ -2,7 +2,7 @@ use std::io::Write;
 
 use color_eyre::eyre;
 use termcolor::Color;
-use tytanic_core::test::Kind;
+use tytanic_core::test::unit::Kind;
 
 use super::Context;
 use crate::cwrite;
@@ -65,14 +65,13 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
         let path = path
             .strip_prefix(project.root())
             .expect("template is in project root");
-
         cwrite!(bold_colored(w, Color::Cyan), "{}", path.display())?;
     } else {
         cwrite!(bold_colored(w, Color::Green), "none")?;
     }
     writeln!(w)?;
 
-    if suite.tests().is_empty() {
+    if suite.is_empty() {
         write!(w, "{:>align$}{}", "Tests", delim_close)?;
         cwrite!(bold_colored(w, Color::Cyan), "none")?;
         writeln!(w)?;
@@ -81,7 +80,7 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
         let mut ephemeral = 0;
         let mut compile_only = 0;
 
-        for test in suite.tests().values() {
+        for test in suite.unit_tests() {
             match test.kind() {
                 Kind::Persistent => persistent += 1,
                 Kind::Ephemeral => ephemeral += 1,
