@@ -10,6 +10,7 @@ use std::{fs, io};
 use thiserror::Error;
 use tytanic_filter::{eval, ExpressionFilter};
 use tytanic_utils::fmt::Term;
+use tytanic_utils::result::{io_not_found, ResultEx};
 use uuid::Uuid;
 
 use crate::project::Project;
@@ -32,32 +33,29 @@ impl Suite {
     }
 
     /// Recursively collects entries in the given directory.
-    #[tracing::instrument(skip(project), fields(test_root = ?project.unit_tests_root()))]
+    #[tracing::instrument(skip_all)]
     pub fn collect(project: &Project) -> Result<Self, Error> {
         let root = project.unit_tests_root();
 
         let mut this = Self::new();
 
-        match root.read_dir() {
-            Ok(read_dir) => {
-                tracing::debug!("collecting from test root directory");
-                for entry in read_dir {
-                    let entry = entry?;
+        let Some(read_dir) = root.read_dir().ignore(io_not_found)? else {
+            tracing::warn!(?root, "unit tests root not found");
+            return Ok(this);
+        };
 
-                    if entry.metadata()?.is_dir() {
-                        let abs = entry.path();
-                        let rel = abs
-                            .strip_prefix(project.unit_tests_root())
-                            .expect("entry must be in full");
+        tracing::debug!("collecting from test root directory");
+        for entry in read_dir {
+            let entry = entry?;
 
-                        this.collect_dir(project, rel)?;
-                    }
-                }
+            if entry.metadata()?.is_dir() {
+                let abs = entry.path();
+                let rel = abs
+                    .strip_prefix(project.unit_tests_root())
+                    .expect("entry must be in full");
+
+                this.collect_dir(project, rel)?;
             }
-            Err(err) if err.kind() == io::ErrorKind::NotFound => {
-                tracing::debug!("test suite empty");
-            }
-            Err(err) => return Err(err.into()),
         }
 
         let without_leafs: BTreeSet<_> = this
@@ -79,6 +77,10 @@ impl Suite {
             }
         }
 
+        if !this.nested.is_empty() {
+            tracing::warn!("found {} nested tests", this.nested.len());
+        }
+
         Ok(this)
     }
 
@@ -86,15 +88,15 @@ impl Suite {
     fn collect_dir(&mut self, project: &Project, dir: &Path) -> Result<(), Error> {
         let abs = project.unit_tests_root().join(dir);
 
-        tracing::trace!(?dir, "collecting directory");
-
         let id = Id::new_from_path(dir)?;
 
+        tracing::trace!(?dir, "checking for test");
         if let Some(test) = Test::load(project, id.clone())? {
             tracing::debug!(id = %test.id(), "collected test");
             self.tests.insert(id, test);
         }
 
+        tracing::trace!(?dir, "collecting sub directories");
         for entry in fs::read_dir(&abs)? {
             let entry = entry?;
 
@@ -104,7 +106,6 @@ impl Suite {
                     .strip_prefix(project.unit_tests_root())
                     .expect("entry must be in full");
 
-                tracing::trace!(path = ?rel, "reading directory entry");
                 self.collect_dir(project, rel)?;
             }
         }
@@ -130,6 +131,11 @@ impl Suite {
 impl Suite {
     /// Apply a filter to a suite.
     pub fn filter(self, filter: Filter) -> Result<FilteredSuite, FilterError> {
+        tracing::warn!(
+            "ignoring {} nested tests while filtering",
+            self.nested.len()
+        );
+
         match &filter {
             Filter::TestSet(expr) => {
                 let mut matched = BTreeMap::new();
