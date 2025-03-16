@@ -258,6 +258,9 @@ impl Reporter<'_, '_> {
                         Term::simple("page").with(*output),
                     )?;
                 } else {
+                    let pad = usize::try_from(pages.len().ilog10() + 1)
+                        .expect("the page count cannot be higher than usize::MAX");
+
                     for (p, e) in pages {
                         let p = p + 1;
                         match e {
@@ -269,11 +272,37 @@ impl Reporter<'_, '_> {
                                 })?;
                             }
                             PageError::SimpleDeviations { deviations } => {
-                                writeln!(
-                                    w,
-                                    "Page {p} had {deviations} {}",
-                                    Term::simple("deviation").with(*deviations),
-                                )?;
+                                let count: usize = deviations.values().copied().sum();
+
+                                #[allow(clippy::erasing_op, clippy::identity_op)]
+                                let bins = [
+                                    // char, threshold
+                                    (" ", 0 * 255 * 3 / 8),
+                                    ("▁", 1 * 255 * 3 / 8),
+                                    ("▂", 2 * 255 * 3 / 8),
+                                    ("▃", 3 * 255 * 3 / 8),
+                                    ("▄", 4 * 255 * 3 / 8),
+                                    ("▅", 5 * 255 * 3 / 8),
+                                    ("▆", 6 * 255 * 3 / 8),
+                                    ("▇", 7 * 255 * 3 / 8),
+                                    ("█", 8 * 255 * 3 / 8),
+                                ];
+
+                                let mut histogram = String::new();
+                                for (lo, hi) in bins.windows(2).map(|s| (s[0].1, s[1].1)) {
+                                    let bin_count: usize =
+                                        deviations.range(lo..=hi).map(|(_, &c)| c).sum();
+
+                                    let idx = bins
+                                        .binary_search_by_key(&(count / bin_count), |&(_, bin)| {
+                                            usize::from(bin)
+                                        })
+                                        .unwrap_or_else(|e| e);
+
+                                    histogram.push_str(bins[idx].0);
+                                }
+
+                                writeln!(w, "Page {p: >pad$} [{histogram}] total: {count}")?;
                             }
                         }
                     }
