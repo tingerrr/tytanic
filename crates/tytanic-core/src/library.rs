@@ -92,12 +92,12 @@ fn assert_panic(
         match message {
             Some(message) => bail!(span, "{}", message),
             None => match val {
-                Value::None => bail!(
+                Value::None => bail!(span, "Expected panic, closure returned successfully"),
+                _ => bail!(
                     span,
                     "Expected panic, closure returned successfully with {}",
                     val.repr(),
                 ),
-                _ => bail!(span, "Expected panic, closure returned successfully"),
             },
         }
     }
