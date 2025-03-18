@@ -121,7 +121,7 @@ impl Str {
                             rest = &esc[1..];
                         } else if let Some(esc) = esc.strip_prefix("u{") {
                             let (digits, other) =
-                                esc.split_once('}').expect("parser ensure closing '}'");
+                                esc.split_once('}').expect("parser ensures closing '}'");
 
                             buf.push(
                                 u32::from_str_radix(digits, 16)
