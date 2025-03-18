@@ -76,6 +76,7 @@ impl Context<'_> {
 // TODO(tinger): cache these values
 impl Context<'_> {
     /// Resolve the current root.
+    #[tracing::instrument(skip_all)]
     pub fn root(&self) -> eyre::Result<PathBuf> {
         Ok(match &self.args.root {
             Some(root) => {
@@ -91,6 +92,7 @@ impl Context<'_> {
     }
 
     /// Discover the current and ensure it is initialized.
+    #[tracing::instrument(skip_all)]
     pub fn project(&self) -> eyre::Result<Project> {
         let root = self.root()?;
 
@@ -108,6 +110,7 @@ impl Context<'_> {
     }
 
     /// Create a new filter from given arguments.
+    #[tracing::instrument(skip_all)]
     pub fn filter(&self, filter: &FilterOptions) -> eyre::Result<Filter> {
         if !filter.tests.is_empty() {
             Ok(Filter::Explicit(filter.tests.iter().cloned().collect()))
@@ -124,6 +127,7 @@ impl Context<'_> {
     }
 
     /// Collect and filter tests for the given project.
+    #[tracing::instrument(skip_all)]
     pub fn collect_tests_with_filter(
         &self,
         project: &Project,
@@ -145,6 +149,7 @@ impl Context<'_> {
     }
 
     /// Collect all tests for the given project.
+    #[tracing::instrument(skip_all)]
     pub fn collect_tests(&self, project: &Project) -> eyre::Result<Suite> {
         let suite = Suite::collect(project)?;
 
@@ -170,6 +175,7 @@ impl Context<'_> {
     }
 
     /// Create a SystemWorld from the given args.
+    #[tracing::instrument(skip_all)]
     pub fn world(&self, compile_options: &CompileOptions) -> eyre::Result<SystemWorld> {
         kit::world(
             self.root()?,
@@ -182,6 +188,7 @@ impl Context<'_> {
 
 impl Context<'_> {
     /// Run the parsed command and report errors as ui messages.
+    #[tracing::instrument(skip_all)]
     pub fn run(&mut self) -> eyre::Result<()> {
         let Err(error) = self.args.cmd.run(self) else {
             return Ok(());

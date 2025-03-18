@@ -29,6 +29,7 @@ impl Test {
 
 impl Test {
     /// Loads the test script source of this test.
+    #[tracing::instrument(skip(project))]
     pub fn load_source(&self, project: &Project) -> io::Result<Source> {
         let test_script = project
             .template_entrypoint()

@@ -140,6 +140,7 @@ impl<'c, 'p> Runner<'c, 'p> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn run(mut self, reporter: &Reporter) -> eyre::Result<SuiteResult> {
         self.result.start();
         reporter.report_start(&self.result)?;
@@ -260,6 +261,7 @@ impl UnitTestRunner<'_, '_, '_> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn run(mut self) -> eyre::Result<TestResult> {
         self.result.start();
         self.prepare()?;

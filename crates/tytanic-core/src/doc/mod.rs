@@ -90,6 +90,7 @@ impl Document {
     }
 
     /// Collects the reference document in the given directory.
+    #[tracing::instrument(skip_all, fields(dir = ?dir.as_ref()))]
     pub fn load<P: AsRef<Path>>(dir: P) -> Result<Self, LoadError> {
         let mut buffers = BTreeMap::new();
 
@@ -160,11 +161,14 @@ impl Document {
     ///
     /// # Panics
     /// Panics if `num == 0`.
+    #[tracing::instrument(skip_all, fields(dir = ?dir.as_ref()))]
     pub fn save<P: AsRef<Path>>(
         &self,
         dir: P,
         optimize_options: Option<&oxipng::Options>,
     ) -> Result<(), SaveError> {
+        tracing::trace!(?optimize_options, "using optimize options");
+
         for (num, page) in self
             .buffers
             .iter()

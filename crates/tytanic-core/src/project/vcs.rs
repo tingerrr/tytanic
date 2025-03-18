@@ -60,6 +60,7 @@ impl Vcs {
 
     /// Checks the given directory for a VCS root, returning which kind was
     /// found.
+    #[tracing::instrument(ret)]
     pub fn exists_at(dir: &Path) -> io::Result<Option<Kind>> {
         if dir.join(".git").try_exists()? || dir.join(".jj").try_exists()? {
             return Ok(Some(Kind::Git));
@@ -85,6 +86,7 @@ impl Vcs {
     }
 
     /// Ignore all ephemeral files and directories of a test.
+    #[tracing::instrument(skip(project, test), fields(test = ?test.id()))]
     pub fn ignore(&self, project: &Project, test: &UnitTest) -> io::Result<()> {
         let mut content = format!("{IGNORE_HEADER}\n\n");
 
@@ -109,6 +111,7 @@ impl Vcs {
         Ok(())
     }
 
+    #[tracing::instrument(skip(project, test), fields(test = ?test.id()))]
     pub fn unignore(&self, project: &Project, test: &UnitTest) -> io::Result<()> {
         let file = project.unit_test_dir(test.id()).join(match self.kind {
             Kind::Git => GITIGNORE_NAME,

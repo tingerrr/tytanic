@@ -268,6 +268,7 @@ fn system_path(
     let buf;
     let mut root = project_root;
     if let Some(spec) = id.package() {
+        tracing::trace!(?spec, "preparing package");
         buf = package_storage.prepare_package(spec, &mut ProgressSink)?;
         root = &buf;
     }

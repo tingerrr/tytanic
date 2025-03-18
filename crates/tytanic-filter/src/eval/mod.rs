@@ -51,6 +51,7 @@ impl<T> Context<T> {
     /// Inserts a new binding, possibly overriding an old one, returns the old
     /// binding if there was one.
     pub fn bind<V: Into<Value<T>>>(&mut self, id: Id, value: V) -> Option<Value<T>> {
+        tracing::trace!(id = %id.as_str(), "binding value into eval context");
         self.bindings.insert(id, value.into())
     }
 
@@ -59,6 +60,7 @@ impl<T> Context<T> {
     where
         T: Clone,
     {
+        tracing::trace!(id = %id.as_ref(), "resolving value from eval context");
         let id = id.as_ref();
         self.bindings
             .get(id)

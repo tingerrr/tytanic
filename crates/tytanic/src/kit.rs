@@ -8,6 +8,7 @@ use typst_kit::package::PackageStorage;
 use crate::cli::commands::{CompileOptions, FontOptions, PackageOptions, Switch};
 use crate::world::SystemWorld;
 
+#[tracing::instrument(skip(font_options, package_options, compile_options))]
 pub fn world(
     project_root: PathBuf,
     font_options: &FontOptions,
@@ -24,6 +25,7 @@ pub fn world(
     Ok(world)
 }
 
+#[tracing::instrument]
 pub fn downloader_from_args(args: &PackageOptions) -> Downloader {
     let agent = format!("{}/{}", tytanic_core::TOOL_NAME, env!("CARGO_PKG_VERSION"));
 
@@ -33,6 +35,7 @@ pub fn downloader_from_args(args: &PackageOptions) -> Downloader {
     }
 }
 
+#[tracing::instrument]
 pub fn package_storage_from_args(args: &PackageOptions) -> PackageStorage {
     PackageStorage::new(
         args.package_cache_path.clone(),
@@ -41,14 +44,8 @@ pub fn package_storage_from_args(args: &PackageOptions) -> PackageStorage {
     )
 }
 
+#[tracing::instrument]
 pub fn fonts_from_args(args: &FontOptions) -> Fonts {
-    let _span = tracing::debug_span!(
-        "searching for fonts",
-        use_embedded_fonts = ?args.use_embedded_fonts,
-        use_system_fonts = ?args.use_system_fonts,
-        paths = ?args.font_paths,
-    );
-
     let mut searcher = FontSearcher::new();
 
     #[cfg(feature = "embed-fonts")]

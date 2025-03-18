@@ -115,6 +115,7 @@ impl Test {
     }
 
     /// Attempt to load a test, returns `None` if no test could be found.
+    #[tracing::instrument(skip(project))]
     pub fn load(project: &Project, id: Id) -> Result<Option<Test>, LoadError> {
         let test_script = project.unit_test_script(&id);
 
@@ -168,6 +169,7 @@ impl Test {
     ///
     /// # Panics
     /// Panics if the given id is equal to the unique template test id.
+    #[tracing::instrument(skip(project, vcs, source, reference))]
     pub fn create(
         project: &Project,
         vcs: Option<&Vcs>,
@@ -222,6 +224,7 @@ impl Test {
     }
 
     /// Creates the temporary directories of this test.
+    #[tracing::instrument(skip(project))]
     pub fn create_temporary_directories(&self, project: &Project) -> io::Result<()> {
         if self.kind.is_ephemeral() {
             tytanic_utils::fs::remove_dir(project.unit_test_ref_dir(&self.id), true)?;
@@ -236,6 +239,7 @@ impl Test {
 
     /// Creates the test script of this test, this will truncate the file if it
     /// already exists.
+    #[tracing::instrument(skip(project, source))]
     pub fn create_script(&self, project: &Project, source: &str) -> io::Result<()> {
         std::fs::write(project.unit_test_script(&self.id), source)?;
         Ok(())
@@ -243,12 +247,14 @@ impl Test {
 
     /// Creates reference script of this test, this will truncate the file if it
     /// already exists.
+    #[tracing::instrument(skip(project, source))]
     pub fn create_reference_script(&self, project: &Project, source: &str) -> io::Result<()> {
         std::fs::write(project.unit_test_ref_script(&self.id), source)?;
         Ok(())
     }
 
     /// Creates the persistent reference document of this test.
+    #[tracing::instrument(skip(project, reference, optimize_options))]
     pub fn create_reference_document(
         &self,
         project: &Project,
@@ -268,6 +274,7 @@ impl Test {
     }
 
     /// Deletes all directories and scripts of this test.
+    #[tracing::instrument(skip(project))]
     pub fn delete(&self, project: &Project) -> io::Result<()> {
         self.delete_reference_document(project)?;
         self.delete_reference_script(project)?;
@@ -280,6 +287,7 @@ impl Test {
     }
 
     /// Deletes the temporary directories of this test.
+    #[tracing::instrument(skip(project))]
     pub fn delete_temporary_directories(&self, project: &Project) -> io::Result<()> {
         if !self.kind.is_compile_only() {
             tytanic_utils::fs::remove_dir(project.unit_test_ref_dir(&self.id), true)?;
@@ -291,18 +299,21 @@ impl Test {
     }
 
     /// Deletes the test script of of this test.
+    #[tracing::instrument(skip(project))]
     pub fn delete_script(&self, project: &Project) -> io::Result<()> {
         tytanic_utils::fs::remove_file(project.unit_test_script(&self.id))?;
         Ok(())
     }
 
     /// Deletes reference script of of this test.
+    #[tracing::instrument(skip(project))]
     pub fn delete_reference_script(&self, project: &Project) -> io::Result<()> {
         tytanic_utils::fs::remove_file(project.unit_test_ref_script(&self.id))?;
         Ok(())
     }
 
     /// Deletes persistent reference document of this test.
+    #[tracing::instrument(skip(project))]
     pub fn delete_reference_document(&self, project: &Project) -> io::Result<()> {
         tytanic_utils::fs::remove_dir(project.unit_test_ref_dir(&self.id), true)?;
         Ok(())
@@ -310,6 +321,7 @@ impl Test {
 
     /// Removes any previous references, if they exist and creates a reference
     /// script by copying the test script.
+    #[tracing::instrument(skip(project, vcs))]
     pub fn make_ephemeral(&mut self, project: &Project, vcs: Option<&Vcs>) -> io::Result<()> {
         self.kind = Kind::Ephemeral;
 
@@ -332,6 +344,7 @@ impl Test {
 
     /// Removes any previous references, if they exist and creates persistent
     /// references from the given pages.
+    #[tracing::instrument(skip(project, vcs))]
     pub fn make_persistent(
         &mut self,
         project: &Project,
@@ -353,6 +366,7 @@ impl Test {
     }
 
     /// Removes any previous references, if they exist.
+    #[tracing::instrument(skip(project, vcs))]
     pub fn make_compile_only(&mut self, project: &Project, vcs: Option<&Vcs>) -> io::Result<()> {
         self.kind = Kind::CompileOnly;
 
@@ -368,6 +382,7 @@ impl Test {
     }
 
     /// Loads the test script source of this test.
+    #[tracing::instrument(skip(project))]
     pub fn load_source(&self, project: &Project) -> io::Result<Source> {
         let test_script = project.unit_test_script(&self.id);
 
@@ -386,6 +401,7 @@ impl Test {
 
     /// Loads the reference test script source of this test, if this test is
     /// ephemeral.
+    #[tracing::instrument(skip(project))]
     pub fn load_reference_source(&self, project: &Project) -> io::Result<Option<Source>> {
         if !self.kind().is_ephemeral() {
             return Ok(None);
@@ -406,11 +422,13 @@ impl Test {
     }
 
     /// Loads the test document of this test.
+    #[tracing::instrument(skip(project))]
     pub fn load_document(&self, project: &Project) -> Result<Document, doc::LoadError> {
         Document::load(project.unit_test_out_dir(&self.id))
     }
 
     /// Loads the persistent reference document of this test.
+    #[tracing::instrument(skip(project))]
     pub fn load_reference_document(&self, project: &Project) -> Result<Document, doc::LoadError> {
         Document::load(project.unit_test_ref_dir(&self.id))
     }

@@ -53,6 +53,7 @@ impl ShallowProject {
     /// project root by looking for a Typst manifest and return `None` if no
     /// manifest is found. If it is `true`, then `dir` is used as the project
     /// root.
+    #[tracing::instrument(skip(dir) fields(dir = ?dir.as_ref()), ret)]
     pub fn discover<P: AsRef<Path>>(
         dir: P,
         search_manifest: bool,
@@ -93,6 +94,7 @@ impl ShallowProject {
 
 impl ShallowProject {
     /// Loads the manifest, configuration and unit test template of a project.
+    #[tracing::instrument]
     pub fn load(self) -> Result<Project, LoadError> {
         let manifest = self.parse_manifest()?;
         let config = manifest
@@ -114,6 +116,7 @@ impl ShallowProject {
 
     /// Parses the project manifest if it exists. Returns `None` if no
     /// manifest is found.
+    #[tracing::instrument]
     pub fn parse_manifest(&self) -> Result<Option<PackageManifest>, ManifestError> {
         let manifest = fs::read_to_string(self.manifest_file())
             .ignore(io_not_found)?
@@ -130,6 +133,7 @@ impl ShallowProject {
 
     /// Parses the manifest config from the tool section. Returns `None` if no
     /// tool section found.
+    #[tracing::instrument]
     pub fn parse_config(
         &self,
         manifest: &PackageManifest,
@@ -151,6 +155,7 @@ impl ShallowProject {
 
     /// Reads the project's unit test template if it exists. Returns `None` if
     /// no template was found.
+    #[tracing::instrument]
     pub fn read_unit_test_template(
         &self,
         config: &ProjectConfig,
