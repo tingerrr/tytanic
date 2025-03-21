@@ -50,6 +50,9 @@ typst-kit.workspace = true
 typst-syntax.workspace = true
 typst.workspace = true
 
+[build-dependencies]
+toml.workspace = true
+
 [features]
 default = ["embed-fonts"]
 embed-fonts = ["typst-kit/embed-fonts"]
