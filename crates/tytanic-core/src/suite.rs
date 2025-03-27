@@ -2,8 +2,7 @@
 //! fields for test templates, custom test set bindings and other information
 //! necessary for managing, filtering and running tests.
 
-use std::collections::btree_map;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use std::{fs, io};

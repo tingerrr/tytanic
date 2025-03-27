@@ -2,8 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::ops::Deref;
-use std::path::Component;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::{fs, io};
 
 use ecow::EcoString;

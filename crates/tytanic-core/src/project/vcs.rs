@@ -9,9 +9,8 @@ use std::fmt::{self, Debug, Display};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-use crate::test::UnitTest;
-
 use super::Project;
+use crate::test::UnitTest;
 
 /// The name of the git ignore file.
 const GITIGNORE_NAME: &str = ".gitignore";
