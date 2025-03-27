@@ -60,8 +60,14 @@ impl Rule {
             Rule::pat_kind_regex => "regex pattern kind",
             Rule::pat_kind_exact => "exact pattern kind",
             Rule::pat_inner | Rule::pat_pat => "pattern",
-            Rule::pat_raw_lit => "raw pattern literal",
-            Rule::pat_raw_char => "any",
+            Rule::pat_raw_lit
+            | Rule::pat_raw_term_outer
+            | Rule::pat_raw_term_inner
+            | Rule::pat_raw_char_esc => "raw pattern literal",
+            Rule::pat_raw_char_outer
+            | Rule::pat_raw_char_inner
+            | Rule::pat_raw_char_normal_outer
+            | Rule::pat_raw_char_normal_inner => "any",
             Rule::pat_sep => "colon",
             Rule::str => "string",
             Rule::str_single | Rule::str_single_inner => "single quoted string",
@@ -108,8 +114,14 @@ impl Rule {
             Rule::pat_kind_regex => "regex",
             Rule::pat_kind_exact => "exact",
             Rule::pat_inner | Rule::pat_pat => "<pattern>",
-            Rule::pat_raw_lit => "<raw pattern>",
-            Rule::pat_raw_char => "<ANY>",
+            Rule::pat_raw_lit
+            | Rule::pat_raw_term_outer
+            | Rule::pat_raw_term_inner
+            | Rule::pat_raw_char_esc => "<raw pattern>",
+            Rule::pat_raw_char_outer
+            | Rule::pat_raw_char_inner
+            | Rule::pat_raw_char_normal_outer
+            | Rule::pat_raw_char_normal_inner => "<ANY>",
             Rule::pat_sep => ":",
             Rule::str => "<str>",
             Rule::str_single | Rule::str_single_inner => "'...'",

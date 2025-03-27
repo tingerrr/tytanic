@@ -245,6 +245,45 @@ mod tests {
             parse("e:a/b").unwrap(),
             Expr::Atom(Atom::Pat(Pat::Exact("a/b".into())))
         );
+        assert_eq!(
+            parse("r:(a/b\\))").unwrap(),
+            Expr::Atom(Atom::Pat(Pat::Regex(Regex::new("(a/b\\))").unwrap())))
+        );
+        assert_eq!(
+            parse("r:(a/b{3,4})").unwrap(),
+            Expr::Atom(Atom::Pat(Pat::Regex(Regex::new("(a/b{3,4})").unwrap())))
+        );
+    }
+
+    #[test]
+    fn test_parse_pattern_raw_termination() {
+        assert_eq!(
+            parse("foo(e:bar)").unwrap(),
+            Expr::Func(Func {
+                id: Id("foo".into()),
+                args: eco_vec![Expr::Atom(Atom::Pat(Pat::Exact("bar".into())))]
+            }),
+        );
+        assert_eq!(
+            parse("foo(e:bar, r:qux(quuz))").unwrap(),
+            Expr::Func(Func {
+                id: Id("foo".into()),
+                args: eco_vec![
+                    Expr::Atom(Atom::Pat(Pat::Exact("bar".into()))),
+                    Expr::Atom(Atom::Pat(Pat::Regex(Regex::new("qux(quuz)").unwrap())))
+                ]
+            }),
+        );
+        assert_eq!(
+            parse("foo(e:bar, r:qux(quuz{3,4}))").unwrap(),
+            Expr::Func(Func {
+                id: Id("foo".into()),
+                args: eco_vec![
+                    Expr::Atom(Atom::Pat(Pat::Exact("bar".into()))),
+                    Expr::Atom(Atom::Pat(Pat::Regex(Regex::new("qux(quuz{3,4})").unwrap())))
+                ]
+            }),
+        );
     }
 
     #[test]
