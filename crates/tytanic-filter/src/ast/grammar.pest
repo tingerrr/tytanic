@@ -55,17 +55,41 @@ pat = _{ pat_inner }
         pat_kind_regex =  { "regex" | "r" }
         pat_kind_exact  = { "exact" | "e" }
     pat_pat = _{ str | pat_raw_lit }
-    pat_raw_lit = { !(str_single_delim | str_double_delim) ~ pat_raw_char+ }
-    pat_raw_char = {
-        !(
-            WHITESPACE
-            | str_single_delim
-            | str_double_delim
-            | ","
-            | "("
-            | ")"
-        ) ~ ANY
+    pat_raw_lit = { pat_raw_term_outer+ }
+    pat_raw_term_outer = _{
+        pat_raw_char_outer+
+        | ("(" ~ pat_raw_term_inner+ ~ ")")
+        | ("{" ~ pat_raw_term_inner+ ~ "}")
+        | ("[" ~ pat_raw_term_inner+ ~ "]")
     }
+    pat_raw_term_inner = _{
+        pat_raw_char_inner+
+        | ("(" ~ pat_raw_term_inner+ ~ ")")
+        | ("{" ~ pat_raw_term_inner+ ~ "}")
+        | ("[" ~ pat_raw_term_inner+ ~ "]")
+    }
+    pat_raw_char_outer = _{ pat_raw_char_esc | pat_raw_char_normal_outer }
+        pat_raw_char_normal_outer = _{
+            !(
+                WHITESPACE
+                | "\\"
+                | ","
+                | "(" | ")"
+                | "{" | "}"
+                | "[" | "]"
+            ) ~ ANY
+        }
+    pat_raw_char_inner = _{ pat_raw_char_esc | pat_raw_char_normal_inner }
+        pat_raw_char_normal_inner = _{
+            !(
+                WHITESPACE
+                | "\\"
+                | "(" | ")"
+                | "{" | "}"
+                | "[" | "]"
+            ) ~ ANY
+        }
+        pat_raw_char_esc = _{ "\\" ~ ANY }
     pat_sep = { ":" }
 
 // strings
