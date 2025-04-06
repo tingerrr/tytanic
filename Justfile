@@ -22,10 +22,7 @@ check:
 
 # run tests project wide
 test:
-	cargo nextest run --workspace
-	# FIXME(tinger): see
-	# https://github.com/nextest-rs/nextest/issues/16
-	cargo test --workspace --doc
+	cargo insta test --test-runner nextest --workspace
 
 # build and serve the book locally
 book *args='--open':
