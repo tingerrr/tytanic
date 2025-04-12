@@ -1,0 +1,12 @@
+[package]
+entrypoint = "lib.typ"
+name = "template"
+version = "0.1.0"
+authors = ["John Doe <john@doe.com>"]
+description = "A template"
+license = "MIT"
+
+[template]
+path = "template"
+entrypoint = "main.typ"
+thumbnail = "thumbnail.png"
