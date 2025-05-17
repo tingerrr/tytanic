@@ -9,7 +9,6 @@ use std::io;
 use std::iter;
 use std::path::Path;
 
-use compile::TestWorldAdapter;
 use compile::Warnings;
 use ecow::EcoVec;
 use thiserror::Error;
@@ -46,17 +45,13 @@ impl Document {
     }
 
     /// Compiles and renders a new document from the given source.
-    pub fn compile<'w, F>(
+    pub fn compile(
         source: Source,
-        world: &'w dyn World,
+        world: &dyn World,
         pixel_per_pt: f32,
         warnings: Warnings,
-        f: F,
-    ) -> Warned<Result<Self, compile::Error>>
-    where
-        F: for<'a> FnOnce(&'a mut TestWorldAdapter<'w>) -> &'a mut TestWorldAdapter<'w>,
-    {
-        let Warned { output, warnings } = compile::compile(source, world, warnings, f);
+    ) -> Warned<Result<Self, compile::Error>> {
+        let Warned { output, warnings } = compile::compile(source, world, warnings);
 
         Warned {
             output: output.map(|doc| Self::render(doc, pixel_per_pt)),

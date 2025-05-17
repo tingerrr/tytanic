@@ -9,8 +9,8 @@ use crate::cwrite;
 use crate::cwriteln;
 use crate::json::FontJson;
 use crate::json::FontVariantJson;
-use crate::kit;
 use crate::ui::Indented;
+use crate::world;
 
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "util-font-args")]
@@ -28,10 +28,10 @@ pub struct Args {
 }
 
 pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
-    let fonts = kit::fonts_from_args(&ctx.args.font);
+    let fonts = world::font_provider(&ctx.args.font);
 
     let fonts = fonts
-        .book
+        .provide_font_book()
         .families()
         .map(|(name, info)| FontJson {
             name,

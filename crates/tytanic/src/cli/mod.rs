@@ -7,6 +7,8 @@ use std::sync::atomic::AtomicBool;
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr;
 use commands::CompileOptions;
+use commands::FontOptions;
+use commands::PackageOptions;
 use termcolor::Color;
 use thiserror::Error;
 use tytanic_core::doc;
@@ -28,10 +30,9 @@ use self::commands::CliArguments;
 use self::commands::FilterOptions;
 use self::commands::Switch;
 use crate::cwrite;
-use crate::kit;
 use crate::ui;
 use crate::ui::Ui;
-use crate::world::SystemWorld;
+use crate::world::Providers;
 
 pub mod commands;
 
@@ -190,13 +191,19 @@ impl Context<'_> {
 
     /// Create a SystemWorld from the given args.
     #[tracing::instrument(skip_all)]
-    pub fn world(&self, compile_options: &CompileOptions) -> eyre::Result<SystemWorld> {
-        kit::world(
-            self.root()?,
-            &self.args.font,
-            &self.args.package,
-            compile_options,
-        )
+    pub fn providers(
+        &self,
+        project: &Project,
+        package_opts: &PackageOptions,
+        font_opts: &FontOptions,
+        compile_opts: &CompileOptions,
+    ) -> eyre::Result<Providers> {
+        Ok(Providers::new(
+            project,
+            package_opts,
+            font_opts,
+            compile_opts,
+        ))
     }
 }
 

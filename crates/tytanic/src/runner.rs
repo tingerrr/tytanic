@@ -27,7 +27,7 @@ use tytanic_core::UnitTest;
 
 use crate::cli::TestFailure;
 use crate::report::Reporter;
-use crate::world::SystemWorld;
+use crate::world::Providers;
 use crate::DEFAULT_OPTIMIZE_OPTIONS;
 
 #[derive(Debug, Clone)]
@@ -75,7 +75,7 @@ pub struct RunnerConfig<'c> {
 pub struct Runner<'c, 'p> {
     pub project: &'p Project,
     pub suite: &'p FilteredSuite,
-    pub world: &'p SystemWorld,
+    pub providers: &'p Providers,
 
     pub result: SuiteResult,
     pub config: RunnerConfig<'c>,
@@ -85,14 +85,14 @@ impl<'c, 'p> Runner<'c, 'p> {
     pub fn new(
         project: &'p Project,
         suite: &'p FilteredSuite,
-        world: &'p SystemWorld,
+        providers: &'p Providers,
         config: RunnerConfig<'c>,
     ) -> Self {
         Self {
             project,
             result: SuiteResult::new(suite),
             suite,
-            world,
+            providers,
             config,
         }
     }
@@ -129,7 +129,7 @@ impl<'c, 'p> Runner<'c, 'p> {
             reporter.clear_status()?;
 
             // TODO(tinger): Retrieve export var from action.
-            reporter.report_test_result(test, &result)?;
+            reporter.report_test_result(self.project, test, &result)?;
 
             if result.is_fail() && self.config.fail_fast {
                 self.result.set_test_result(test.id().clone(), result);
@@ -402,11 +402,12 @@ impl UnitTestRunner<'_, '_, '_> {
     fn compile_inner(&mut self, source: Source, is_reference: bool) -> eyre::Result<PagedDocument> {
         let Warned { output, warnings } = compile::compile(
             source,
-            self.project_runner.world,
+            &self.project_runner.providers.unit_world(
+                self.project_runner.project,
+                self.test,
+                is_reference,
+            ),
             self.project_runner.config.warnings,
-            // NOTE(tinger): We only use augmentation here because package
-            // rerouting should not happen for unit tests.
-            |w| w.augment_standard_library(true),
         );
 
         self.result.set_warnings(warnings);
@@ -576,18 +577,11 @@ impl TemplateTestRunner<'_, '_, '_> {
     pub fn compile_template(&mut self, source: Source) -> eyre::Result<PagedDocument> {
         let Warned { output, warnings } = compile::compile(
             source,
-            self.project_runner.world,
+            &self
+                .project_runner
+                .providers
+                .template_world(self.project_runner.project, self.test),
             self.project_runner.config.warnings,
-            |w| {
-                w.reroute_package(self.project_runner.project.package_spec())
-                    .root_prefix(
-                        self.project_runner
-                            .project
-                            .manifest()
-                            .and_then(|m| m.template.as_ref())
-                            .map(|t| t.path.as_str().into()),
-                    )
-            },
         );
 
         self.result.set_warnings(warnings);

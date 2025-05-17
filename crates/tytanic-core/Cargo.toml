@@ -16,6 +16,7 @@ readme.workspace = true
 tytanic-filter.workspace = true
 tytanic-utils.workspace = true
 
+chrono.workspace = true
 comemo.workspace = true
 dirs.workspace = true
 ecow.workspace = true
@@ -28,6 +29,7 @@ tracing.workspace = true
 toml.workspace = true
 typst.workspace = true
 typst-assets.workspace = true
+typst-kit.workspace = true
 typst-library.workspace = true
 typst-render.workspace = true
 uuid = { workspace = true, features = ["v4", "serde"] }

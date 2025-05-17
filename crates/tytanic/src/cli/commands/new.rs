@@ -100,21 +100,23 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
         Kind::CompileOnly => None,
         Kind::Ephemeral => Some(Reference::Ephemeral(source.into())),
         Kind::Persistent => {
-            let world = ctx.world(&args.compile)?;
+            let providers =
+                ctx.providers(&project, &ctx.args.package, &ctx.args.font, &args.compile)?;
+
             let path = project.unit_test_template_file();
 
             let path = path
                 .strip_prefix(project.root())
                 .expect("template is in project root");
 
+            let id = FileId::new(None, VirtualPath::new(path));
+            let world = providers.system_world(id);
+
             let Warned { output, warnings } = Document::compile(
-                Source::new(FileId::new(None, VirtualPath::new(path)), source.into()),
+                Source::new(id, source.into()),
                 &world,
                 ppi_to_ppp(args.export.ppi.unwrap_or(project.config().defaults.ppi)),
                 args.compile.warnings.into_native(),
-                // NOTE(tinger): We only use augmentation here because package
-                // rerouting should not happen for unit tests.
-                |w| w.augment_standard_library(true),
             );
 
             let doc = match output {
