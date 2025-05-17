@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::{fs, io, mem};
 
 use chrono::{DateTime, Datelike, FixedOffset, Local, Utc};
@@ -20,13 +20,136 @@ use typst::{Library, World};
 use typst_kit::download::ProgressSink;
 use typst_kit::fonts::{FontSlot, Fonts};
 use typst_kit::package::PackageStorage;
+use tytanic_core::library::augmented_library;
+use tytanic_core::{Environment, Project, TemplateTest, UnitTest};
+
+use crate::kit;
+
+pub struct Environment {
+    system: SystemWorld,
+    project: Project,
+}
+
+impl Environment {
+    fn system_world(&self) -> &SystemWorld {
+        &self.system
+    }
+
+    fn unit_world(&self, test: &UnitTest) -> UnitWorld<'_> {
+        UnitWorld {
+            system: &self.system,
+            project: &self.project,
+            test,
+            augmented_library: augmented_library(|b| b),
+        }
+    }
+
+    fn template_world(&self, test: &TemplateTest) -> TemplateWorld<'_> {
+        TemplateWorld {
+            system: &self.system,
+            project: &self.project,
+            test,
+        }
+    }
+}
+
+/// A thin shim around the [`SystemWorld`] with functionality specific to unit
+/// tests.
+#[derive(Debug)]
+pub struct UnitWorld<'a> {
+    system: &'a SystemWorld,
+    project: &'a Project,
+    test: &'a UnitTest,
+    augmented_library: LazyHash<Library>,
+}
+
+impl World for UnitWorld {
+    fn library(&self) -> &LazyHash<Library> {
+        &self.augmented_library
+    }
+
+    fn book(&self) -> &LazyHash<FontBook> {
+        &self.system.book
+    }
+
+    fn main(&self) -> FileId {
+        self.system.main()
+    }
+
+    fn source(&self, id: FileId) -> FileResult<Source> {
+        self.slot(id, |slot| {
+            slot.source(&self.project.root(), &self.system.package_storage)
+        })
+    }
+
+    fn file(&self, id: FileId) -> FileResult<Bytes> {
+        self.slot(id, |slot| {
+            slot.file(&self.project.root(), &self.system.package_storage)
+        })
+    }
+
+    fn font(&self, index: usize) -> Option<Font> {
+        self.system.fonts[index].get()
+    }
+
+    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+        self.system.today(offset)
+    }
+}
+
+/// A thin shim around the [`SystemWorld`] with functionality specific to
+/// template tests.
+#[derive(Debug)]
+pub struct TemplateWorld<'a> {
+    system: &'a SystemWorld,
+    project: &'a Project,
+    test: &'a TemplateTest,
+}
+
+impl World for TemplateWorld {
+    fn library(&self) -> &LazyHash<Library> {
+        &self.system.library
+    }
+
+    fn book(&self) -> &LazyHash<FontBook> {
+        &self.system.book
+    }
+
+    fn main(&self) -> FileId {
+        self.system.main()
+    }
+
+    fn source(&self, id: FileId) -> FileResult<Source> {
+        self.slot(id, |slot| {
+            slot.source(
+                &self.project.template_root().unwrap(),
+                &self.system.package_storage,
+            )
+        })
+    }
+
+    fn file(&self, id: FileId) -> FileResult<Bytes> {
+        self.slot(id, |slot| {
+            slot.file(
+                &self.project.template_root().unwrap(),
+                &self.system.package_storage,
+            )
+        })
+    }
+
+    fn font(&self, index: usize) -> Option<Font> {
+        self.system.fonts[index].get()
+    }
+
+    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+        self.system.today(offset)
+    }
+}
 
 /// A world that provides access to the operating system.
 pub struct SystemWorld {
     /// The working directory.
     workdir: Option<PathBuf>,
-    /// The root relative to which absolute paths are resolved.
-    root: PathBuf,
     /// Typst's standard library.
     library: LazyHash<Library>,
     /// Metadata about discovered fonts.
@@ -51,7 +174,6 @@ impl SystemWorld {
     ) -> io::Result<Self> {
         Ok(Self {
             workdir: std::env::current_dir().ok(),
-            root,
             library: LazyHash::default(),
             book: LazyHash::new(fonts.book),
             fonts: fonts.fonts,
@@ -59,11 +181,6 @@ impl SystemWorld {
             package_storage,
             now,
         })
-    }
-
-    /// The root relative to which absolute paths are resolved.
-    pub fn root(&self) -> &Path {
-        &self.root
     }
 
     /// The current working directory.
@@ -84,34 +201,9 @@ impl SystemWorld {
         self.source(id)
             .expect("file id does not point to any source file")
     }
-}
 
-impl World for SystemWorld {
-    fn library(&self) -> &LazyHash<Library> {
-        &self.library
-    }
-
-    fn book(&self) -> &LazyHash<FontBook> {
-        &self.book
-    }
-
-    fn main(&self) -> FileId {
-        panic!("system world does not have a main file")
-    }
-
-    fn source(&self, id: FileId) -> FileResult<Source> {
-        self.slot(id, |slot| slot.source(&self.root, &self.package_storage))
-    }
-
-    fn file(&self, id: FileId) -> FileResult<Bytes> {
-        self.slot(id, |slot| slot.file(&self.root, &self.package_storage))
-    }
-
-    fn font(&self, index: usize) -> Option<Font> {
-        self.fonts[index].get()
-    }
-
-    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+    /// Returns the configured datetime used for compilation.
+    pub fn today(&self, offset: Option<i64>) -> Option<Datetime> {
         // The time with the specified UTC offset, or within the local time zone.
         let with_offset = match offset {
             None => self.now.with_timezone(&Local).fixed_offset(),
@@ -170,13 +262,9 @@ impl FileSlot {
     }
 
     /// Retrieve the source for this file.
-    fn source(
-        &mut self,
-        project_root: &Path,
-        package_storage: &PackageStorage,
-    ) -> FileResult<Source> {
+    fn source(&mut self, root: &Path, package_storage: &PackageStorage) -> FileResult<Source> {
         self.source.get_or_init(
-            || read(self.id, project_root, package_storage),
+            || read(self.id, root, package_storage),
             |data, prev| {
                 let text = decode_utf8(&data)?;
                 if let Some(mut prev) = prev {
@@ -190,9 +278,9 @@ impl FileSlot {
     }
 
     /// Retrieve the file's bytes.
-    fn file(&mut self, project_root: &Path, package_storage: &PackageStorage) -> FileResult<Bytes> {
+    fn file(&mut self, root: &Path, package_storage: &PackageStorage) -> FileResult<Bytes> {
         self.file.get_or_init(
-            || read(self.id, project_root, package_storage),
+            || read(self.id, root, package_storage),
             |data, _| Ok(Bytes::new(data)),
         )
     }
@@ -258,15 +346,11 @@ impl<T: Clone> SlotCell<T> {
 
 /// Resolves the path of a file id on the system, downloading a package if
 /// necessary.
-fn system_path(
-    project_root: &Path,
-    id: FileId,
-    package_storage: &PackageStorage,
-) -> FileResult<PathBuf> {
+fn system_path(root: &Path, id: FileId, package_storage: &PackageStorage) -> FileResult<PathBuf> {
     // Determine the root path relative to which the file path
     // will be resolved.
     let buf;
-    let mut root = project_root;
+    let mut root = root;
     if let Some(spec) = id.package() {
         tracing::trace!(?spec, "preparing package");
         buf = package_storage.prepare_package(spec, &mut ProgressSink)?;
@@ -282,8 +366,8 @@ fn system_path(
 ///
 /// If the ID represents stdin it will read from standard input,
 /// otherwise it gets the file path of the ID and reads the file from disk.
-fn read(id: FileId, project_root: &Path, package_storage: &PackageStorage) -> FileResult<Vec<u8>> {
-    read_from_disk(&system_path(project_root, id, package_storage)?)
+fn read(id: FileId, root: &Path, package_storage: &PackageStorage) -> FileResult<Vec<u8>> {
+    read_from_disk(&system_path(root, id, package_storage)?)
 }
 
 /// Read a file from disk.
@@ -307,7 +391,7 @@ fn decode_utf8(buf: &[u8]) -> FileResult<&str> {
 type CodespanResult<T> = Result<T, CodespanError>;
 type CodespanError = codespan_reporting::files::Error;
 
-impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
+impl<'a> codespan_reporting::files::Files<'a> for Environment {
     type FileId = FileId;
     type Name = String;
     type Source = Source;
@@ -319,7 +403,7 @@ impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
         } else {
             // Try to express the path relative to the working directory.
             vpath
-                .resolve(self.root())
+                .resolve(self.project.root())
                 // .and_then(|abs| pathdiff::diff_paths(abs, self.workdir()))
                 // .as_deref()
                 .unwrap_or_else(|| vpath.as_rootless_path().to_path_buf())
@@ -329,11 +413,11 @@ impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
     }
 
     fn source(&'a self, id: FileId) -> CodespanResult<Self::Source> {
-        Ok(self.lookup(id))
+        Ok(self.system.lookup(id))
     }
 
     fn line_index(&'a self, id: FileId, given: usize) -> CodespanResult<usize> {
-        let source = self.lookup(id);
+        let source = self.system.lookup(id);
         source
             .byte_to_line(given)
             .ok_or_else(|| CodespanError::IndexTooLarge {
@@ -343,7 +427,7 @@ impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
     }
 
     fn line_range(&'a self, id: FileId, given: usize) -> CodespanResult<std::ops::Range<usize>> {
-        let source = self.lookup(id);
+        let source = self.system.lookup(id);
         source
             .line_to_range(given)
             .ok_or_else(|| CodespanError::LineTooLarge {
@@ -353,7 +437,7 @@ impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
     }
 
     fn column_number(&'a self, id: FileId, _: usize, given: usize) -> CodespanResult<usize> {
-        let source = self.lookup(id);
+        let source = self.system.lookup(id);
         source.byte_to_column(given).ok_or_else(|| {
             let max = source.len_bytes();
             if given <= max {
