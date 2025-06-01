@@ -1,8 +1,8 @@
 //! Implementations for the test set DSL. See the language [reference] and
 //! [guide] for more info.
 //!
-//! [reference]: https://tingerrr.github.io/tytanic/reference/test-sets/index.html
-//! [guide]: https://tingerrr.github.io/tytanic/guides/test-sets.html
+//! [reference]: https://typst-community.github.io/tytanic/reference/test-sets/index.html
+//! [guide]: https://typst-community.github.io/tytanic/guides/test-sets.html
 
 use tytanic_filter::ast::Id;
 use tytanic_filter::eval::{self, Context, Error, Func, Set, Value};

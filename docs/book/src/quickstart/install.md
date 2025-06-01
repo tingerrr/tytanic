@@ -39,7 +39,7 @@ cargo install --locked tytanic@0.2.2
 
 #### Nightly
 ```shell
-cargo install --locked --git https://github.com/tingerrr/tytanic
+cargo install --locked --git https://github.com/typst-community/tytanic
 ```
 
 This method usually doesn't require manually placing the `tt` binary in your `$PATH` because the cargo binary directory should already be in there.
@@ -47,12 +47,12 @@ This method usually doesn't require manually placing the `tt` binary in your `$P
 ### Nix Flake
 #### Stable
 ```shell
-nix run github:tingerrr/tytanic/v0.2.2
+nix run github:typst-community/tytanic/v0.2.2
 ```
 
 #### Nightly
 ```shell
-nix run github:tingerrr/tytanic
+nix run github:typst-community/tytanic
 ```
 
 This method does't require any extraction or `$PATH` modifications.
@@ -60,7 +60,7 @@ This method does't require any extraction or `$PATH` modifications.
 ### Using docker
 Every release is automatically added to the GitHub Container Registry `ghcr.io` and can be pulled like so:
 ```shell
-docker pull ghcr.io/tingerrr/tytanic:v0.2.2
+docker pull ghcr.io/typst-community/tytanic:v0.2.2
 ```
 
 Check out the [package][docker] for platform specific builds.
@@ -83,7 +83,7 @@ OpenSSL (**v1.0.1** to **v3.x.x**) or LibreSSL (**v2.5** to **v3.7.x**) are requ
 When installing from source the `vendor-openssl` feature can be used on unix-like operating systems to vendor OpenSSL.
 This avoids the need for it on the operating system.
 
-[releases]: https://github.com/tingerrr/tytanic/releases/
+[releases]: https://github.com/typst-community/tytanic/releases/
 [rustup]: https://www.rust-lang.org/tools/install
-[docker]: https://github.com/users/tingerrr/packages/container/tytanic
+[docker]: https://github.com/users/typst-community/packages/container/tytanic
 [universe]: https://typst.app/universe

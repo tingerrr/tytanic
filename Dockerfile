@@ -32,13 +32,13 @@ FROM alpine:latest
 ARG CREATED
 ARG REVISION
 
-LABEL org.opencontainers.image.authors="The Tytanic Project Developers"
+LABEL org.opencontainers.image.authors="The Tytanic Contributors"
 LABEL org.opencontainers.image.created=${CREATED}
 LABEL org.opencontainers.image.description="A test runner for typst projects."
-LABEL org.opencontainers.image.documentation="https://tingerrr.github.io/tytanic/"
+LABEL org.opencontainers.image.documentation="https://typst-community.github.io/tytanic/"
 LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
 LABEL org.opencontainers.image.revision=${REVISION}
-LABEL org.opencontainers.image.source="https://github.com/tingerrr/tytanic"
+LABEL org.opencontainers.image.source="https://github.com/typst-community/tytanic"
 LABEL org.opencontainers.image.title="Tytanic Docker image"
 LABEL org.opencontainers.image.vendor="tytanic"
 

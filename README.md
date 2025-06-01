@@ -27,7 +27,7 @@ Tytanic is dual-licensed under MIT or Apache 2.0 (`SPDX-License-Identifier: MIT 
 [changelog]: ./docs/CHANGELOG.md
 
 [Typst]: https://typst.app
-[book]: https://tingerrr.github.io/tytanic/index.html
+[book]: https://typst-community.github.io/tytanic/index.html
 
 [demo-thumb]: https://asciinema.org/a/rW9HGUBbtBnmkSddgbKb7hRlI.svg
 [demo]: https://asciinema.org/a/rW9HGUBbtBnmkSddgbKb7hRlI

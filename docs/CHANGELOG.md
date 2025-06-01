@@ -1,4 +1,4 @@
-# [unreleased](https://github.com/tingerrr/tytanic/releases/tag/)
+# [unreleased](https://github.com/typst-community/tytanic/releases/tag/)
 ## Highlights
 
 ## Changes
@@ -16,6 +16,7 @@
 - Added `--include-persistent-references` to `util clean` sub command
 - Added filter options to `util clean` sub command
 - Re-licensed under `MIT OR Apache-2.0`
+- Transferred repository to the typst-community organization
 
 ## Fixes
 - Don't panic when trying to update non-persistent tests
@@ -23,7 +24,7 @@
 
 ---
 
-# [v0.2.2](https://github.com/tingerrr/tytanic/releases/tag/v0.2.2)
+# [v0.2.2](https://github.com/typst-community/tytanic/releases/tag/v0.2.2)
 ## Changes
 - Update MSRV to `1.84`
 - Update dependencies
@@ -31,13 +32,13 @@
 
 ---
 
-# [v0.2.1](https://github.com/tingerrr/tytanic/releases/tag/v0.2.1)
+# [v0.2.1](https://github.com/typst-community/tytanic/releases/tag/v0.2.1)
 ## Fixes
 - Do not ignore critical error paths
 
 ---
 
-# [v0.2.0](https://github.com/tingerrr/tytanic/releases/tag/v0.2.0)
+# [v0.2.0](https://github.com/typst-community/tytanic/releases/tag/v0.2.0)
 ## Highlights
 This release bumps Typst to `0.13.0` and brings plenty of improvements like annotations and config options for various export and comparison settings.
 Among other things this release focuses on improved reproducibility by no longer reading system fonts by default.
@@ -67,15 +68,15 @@ Among other things this release focuses on improved reproducibility by no longer
 
 ---
 
-# [v0.1.3](https://github.com/tingerrr/tytanic/releases/tag/v0.1.3)
+# [v0.1.3](https://github.com/typst-community/tytanic/releases/tag/v0.1.3)
 ## Fixes
 - Don't delete persistent references on `tt run`
 
 ---
 
-# [v0.1.2](https://github.com/tingerrr/tytanic/releases/tag/v0.1.2)
+# [v0.1.2](https://github.com/typst-community/tytanic/releases/tag/v0.1.2)
 ## Highlights
-This release adds a workflow for releasing Docker containers to `ghrc.io/tingerrr/tytanic` for each subsequent.
+This release adds a workflow for releasing Docker containers to `ghrc.io/typst-community/tytanic` for each subsequent.
 
 > [!important]
 > This release was yanked, see v0.1.3.
@@ -108,7 +109,7 @@ This release adds a workflow for releasing Docker containers to `ghrc.io/tingerr
 
 ---
 
-# [v0.1.1](https://github.com/tingerrr/tytanic/releases/tag/v0.1.1)
+# [v0.1.1](https://github.com/typst-community/tytanic/releases/tag/v0.1.1)
 ## Changes
 - Added `tt util vcs ignore` to regenerate ignore files
 - Show if template is detected in `tt status`
@@ -124,7 +125,7 @@ This release adds a workflow for releasing Docker containers to `ghrc.io/tingerr
 
 ---
 
-# [v0.1.0](https://github.com/tingerrr/tytanic/releases/tag/v0.1.0)
+# [v0.1.0](https://github.com/typst-community/tytanic/releases/tag/v0.1.0)
 ## Highlights
 This is the initial release of Tytanic, it now hosts an mdBook using GitHub pages and contains many new features:
 - test sets

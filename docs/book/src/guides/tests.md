@@ -194,8 +194,8 @@ See [#34].
 
 This should equip you with all the knowledge of how to reliably test your projects, but if you're still curious about all the details check out the [reference for tests][tests].
 
-[#73]: https://github.com/tingerrr/tytanic/issues/73
-[#49]: https://github.com/tingerrr/tytanic/issues/49
-[#34]: https://github.com/tingerrr/tytanic/issues/34
+[#73]: https://github.com/typst-community/tytanic/issues/73
+[#49]: https://github.com/typst-community/tytanic/issues/49
+[#34]: https://github.com/typst-community/tytanic/issues/34
 [tests]: ../reference/tests/index.html
 [oxipng]: https://github.com/shssoichiro/oxipng
