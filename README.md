@@ -20,6 +20,9 @@ To see how to get started with `tytanic`, check out the [book].
 ## Changelog
 The changelog can be found [here][changelog].
 
+## License
+Tytanic is dual-licensed under MIT or Apache 2.0 (`SPDX-License-Identifier: MIT OR Apache-2.0`).
+
 [contrib]: ./docs/CONTRIBUTING.md
 [changelog]: ./docs/CHANGELOG.md
 
