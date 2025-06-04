@@ -20,11 +20,14 @@ To see how to get started with `tytanic`, check out the [book].
 ## Changelog
 The changelog can be found [here][changelog].
 
+## License
+Tytanic is dual-licensed under MIT or Apache 2.0 (`SPDX-License-Identifier: MIT OR Apache-2.0`).
+
 [contrib]: ./docs/CONTRIBUTING.md
 [changelog]: ./docs/CHANGELOG.md
 
 [Typst]: https://typst.app
-[book]: https://tingerrr.github.io/tytanic/index.html
+[book]: https://typst-community.github.io/tytanic/index.html
 
 [demo-thumb]: https://asciinema.org/a/rW9HGUBbtBnmkSddgbKb7hRlI.svg
 [demo]: https://asciinema.org/a/rW9HGUBbtBnmkSddgbKb7hRlI

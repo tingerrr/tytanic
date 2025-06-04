@@ -26,4 +26,4 @@ Read the [guide], if you want to see some examples on how to write and run vario
 - [Annotations](./annotations.md) lists the syntax for annotations and which are available.
 
 [guide]: ../../guides/tests.md
-[#34]: https://github.com/tingerrr/tytanic/issues/34
+[#34]: https://github.com/typst-community/tytanic/issues/34

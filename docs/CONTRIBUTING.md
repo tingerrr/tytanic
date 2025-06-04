@@ -41,7 +41,7 @@ Here's a good writeup of [how to write good commit messages](https://cbea.ms/git
 ---
 
 If you have trouble squashing, amending or reordering commits try out [jj].
-It which makes history rewriting very easy and is useful for git beginners and power-users alike.
+It makes history rewriting very easy and is useful for git beginners and power-users alike.
 If you prefer a GUI or TUI, there's also [gg] and [lazyjj] among others.
 
 [jj]: https://github.com/martinvonz/jj

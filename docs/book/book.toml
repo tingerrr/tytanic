@@ -10,4 +10,4 @@ src = "src"
 build-dir = "build"
 
 [output.html]
-git-repository-url = "https://github.com/tingerrr/tytanic"
+git-repository-url = "https://github.com/typst-community/tytanic"
