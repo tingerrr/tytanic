@@ -18,6 +18,8 @@ use crate::test::unit::LoadError;
 use crate::test::{Id, ParseIdError, Test, TestResult, UnitTest};
 use crate::TemplateTest;
 
+pub mod xml;
+
 /// A suite of tests.
 #[derive(Debug, Clone)]
 pub struct Suite {
