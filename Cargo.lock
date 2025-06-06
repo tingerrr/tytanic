@@ -3341,12 +3341,14 @@ version = "0.2.2"
 dependencies = [
  "bytemuck",
  "chrono",
+ "codespan-reporting",
  "comemo",
  "dirs 5.0.1",
  "ecow",
  "oxipng",
  "png",
  "serde",
+ "termcolor",
  "thiserror 1.0.69",
  "tiny-skia",
  "toml",
@@ -3358,6 +3360,7 @@ dependencies = [
  "tytanic-filter",
  "tytanic-utils",
  "uuid",
+ "xml",
 ]
 
 [[package]]
@@ -4031,6 +4034,21 @@ dependencies = [
  "libc",
  "rustix",
 ]
+
+[[package]]
+name = "xml"
+version = "0.8.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ede1c99c55b4b3ad0349018ef0eccbe954ce9c342334410707ee87177fcf2ab4"
+dependencies = [
+ "xml-rs",
+]
+
+[[package]]
+name = "xml-rs"
+version = "0.8.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
 
 [[package]]
 name = "xmlparser"

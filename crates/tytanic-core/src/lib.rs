@@ -1,6 +1,7 @@
 //! The core library of the Tytanic test runner.
 
 pub mod config;
+pub mod diag;
 pub mod doc;
 pub mod dsl;
 pub mod library;

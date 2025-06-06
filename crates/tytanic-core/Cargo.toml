@@ -17,12 +17,14 @@ tytanic-filter.workspace = true
 tytanic-utils.workspace = true
 
 chrono.workspace = true
+codespan-reporting.workspace = true
 comemo.workspace = true
 dirs.workspace = true
 ecow.workspace = true
 oxipng.workspace = true
 png.workspace = true
 serde = { workspace = true, features = ["derive"] }
+termcolor.workspace = true
 thiserror.workspace = true
 tiny-skia.workspace = true
 tracing.workspace = true
@@ -32,6 +34,7 @@ typst-assets.workspace = true
 typst-library.workspace = true
 typst-render.workspace = true
 uuid = { workspace = true, features = ["v4", "serde"] }
+xml.workspace = true
 
 [dev-dependencies]
 bytemuck = "1.16.1"

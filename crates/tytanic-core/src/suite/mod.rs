@@ -29,6 +29,8 @@ use crate::test::TestResult;
 use crate::test::UnitTest;
 use crate::TemplateTest;
 
+pub mod xml;
+
 /// A suite of tests.
 #[derive(Debug, Clone)]
 pub struct Suite {
