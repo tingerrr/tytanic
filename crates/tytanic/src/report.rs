@@ -2,8 +2,9 @@
 
 use std::io;
 use std::io::Write;
-use std::time::Duration;
 
+use chrono::TimeDelta;
+use chrono::Utc;
 use color_eyre::eyre;
 use termcolor::Color;
 use tytanic_core::doc::compare;
@@ -87,7 +88,7 @@ impl Reporter<'_, '_> {
                 duration_color(
                     result
                         .duration()
-                        .checked_div(result.run() as u32)
+                        .checked_div(result.run() as i32)
                         .unwrap_or_default(),
                 ),
             )?;
@@ -156,7 +157,7 @@ impl Reporter<'_, '_> {
             return Ok(());
         }
 
-        let duration = result.timestamp().elapsed();
+        let duration = Utc::now().signed_duration_since(result.timestamp());
 
         let mut w = ui::annotated(self.ui.stderr(), "", Color::Black, RUN_ANNOT_PADDING)?;
 
@@ -166,7 +167,7 @@ impl Reporter<'_, '_> {
                 &mut w,
                 duration_color(
                     duration
-                        .checked_div(result.run() as u32)
+                        .checked_div(result.run() as i32)
                         .unwrap_or_default(),
                 ),
             )?;
@@ -294,8 +295,8 @@ impl Reporter<'_, '_> {
 }
 
 /// Writes a padded duration in human readable form
-fn write_duration(w: &mut dyn Write, duration: Duration) -> io::Result<()> {
-    let s = duration.as_secs();
+fn write_duration(w: &mut dyn Write, duration: TimeDelta) -> io::Result<()> {
+    let s = duration.num_seconds();
     let ms = duration.subsec_millis();
 
     if s > 0 {
@@ -310,8 +311,8 @@ fn write_duration(w: &mut dyn Write, duration: Duration) -> io::Result<()> {
 }
 
 /// Returns the color to use for a test's duration.
-fn duration_color(duration: Duration) -> Color {
-    match duration.as_secs() {
+fn duration_color(duration: TimeDelta) -> Color {
+    match duration.num_seconds() {
         0 if duration.is_zero() => Color::Rgb(128, 128, 128),
         0 => Color::Green,
         1..=5 => Color::Yellow,

@@ -8,9 +8,10 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::time::Duration;
-use std::time::Instant;
 
+use chrono::DateTime;
+use chrono::TimeDelta;
+use chrono::Utc;
 use thiserror::Error;
 use tytanic_filter::eval;
 use tytanic_filter::ExpressionFilter;
@@ -392,8 +393,8 @@ pub struct SuiteResult {
     filtered: usize,
     passed: usize,
     failed: usize,
-    timestamp: Instant,
-    duration: Duration,
+    timestamp: DateTime<Utc>,
+    duration: TimeDelta,
     results: BTreeMap<Id, TestResult>,
 }
 
@@ -408,8 +409,8 @@ impl SuiteResult {
             filtered: suite.filtered().len(),
             passed: 0,
             failed: 0,
-            timestamp: Instant::now(),
-            duration: Duration::ZERO,
+            timestamp: Utc::now(),
+            duration: TimeDelta::zero(),
             results: suite
                 .matched()
                 .tests()
@@ -469,12 +470,12 @@ impl SuiteResult {
     }
 
     /// The timestamp at which the suite run started.
-    pub fn timestamp(&self) -> Instant {
+    pub fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp
     }
 
     /// The duration of the whole suite run.
-    pub fn duration(&self) -> Duration {
+    pub fn duration(&self) -> TimeDelta {
         self.duration
     }
 
@@ -497,13 +498,13 @@ impl SuiteResult {
     ///
     /// See [`SuiteResult::end`].
     pub fn start(&mut self) {
-        self.timestamp = Instant::now();
+        self.timestamp = Utc::now();
     }
 
     /// Sets the duration to the time elapsed since [`SuiteResult::start`] was
     /// called.
     pub fn end(&mut self) {
-        self.duration = self.timestamp.elapsed();
+        self.duration = Utc::now().signed_duration_since(self.timestamp);
     }
 
     /// Add a test result.
