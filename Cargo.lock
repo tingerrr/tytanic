@@ -3340,6 +3340,7 @@ name = "tytanic-core"
 version = "0.2.2"
 dependencies = [
  "bytemuck",
+ "chrono",
  "comemo",
  "dirs 5.0.1",
  "ecow",
@@ -3352,6 +3353,7 @@ dependencies = [
  "tracing",
  "typst",
  "typst-assets",
+ "typst-kit",
  "typst-library",
  "typst-render",
  "tytanic-filter",

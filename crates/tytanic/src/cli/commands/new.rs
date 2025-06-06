@@ -101,9 +101,6 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
                 &world,
                 ppi_to_ppp(args.export.ppi.unwrap_or(project.config().defaults.ppi)),
                 args.compile.warnings.into_native(),
-                // NOTE(tinger): We only use augmentation here because package
-                // rerouting should not happen for unit tests.
-                |w| w.augment_standard_library(true),
             );
 
             let doc = match output {

@@ -109,12 +109,17 @@ fn assert_panic(
 mod tests {
     use typst::syntax::Source;
 
-    use crate::_dev::VirtualWorld;
+    use super::*;
     use crate::doc::compile::{self, Warnings};
+    use crate::world_builder::file::VirtualFileProvider;
+    use crate::world_builder::library::DefaultLibraryProvider;
+    use crate::world_builder::virtual_world;
 
     #[test]
     fn test_catch() {
-        let world = VirtualWorld::default();
+        let mut files = VirtualFileProvider::new();
+        let library = DefaultLibraryProvider::with_library(augmented_default_library());
+
         let source = Source::detached(
             r#"
             #let errors = catch(() => {
@@ -124,16 +129,16 @@ mod tests {
         "#,
         );
 
-        compile::compile(source, &world, Warnings::Emit, |w| {
-            w.augment_standard_library(true)
-        })
-        .output
-        .unwrap();
+        let world = virtual_world(source, &mut files, &library);
+
+        compile::compile(world, Warnings::Emit).output.unwrap();
     }
 
     #[test]
     fn test_assert_panic() {
-        let world = VirtualWorld::default();
+        let mut files = VirtualFileProvider::new();
+        let library = DefaultLibraryProvider::with_library(augmented_default_library());
+
         let source = Source::detached(
             r#"
             #assert-panic(() => {
@@ -142,10 +147,8 @@ mod tests {
         "#,
         );
 
-        compile::compile(source, &world, Warnings::Emit, |w| {
-            w.augment_standard_library(true)
-        })
-        .output
-        .unwrap();
+        let world = virtual_world(source, &mut files, &library);
+
+        compile::compile(world, Warnings::Emit).output.unwrap();
     }
 }

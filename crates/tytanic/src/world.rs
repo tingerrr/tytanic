@@ -20,24 +20,141 @@ use typst::{Library, World};
 use typst_kit::download::ProgressSink;
 use typst_kit::fonts::{FontSlot, Fonts};
 use typst_kit::package::PackageStorage;
+use tytanic_core::library::augmented_library;
+use tytanic_core::{Project, TemplateTest, UnitTest};
+
+pub struct Environment {
+    system: SystemWorld,
+    project: Project,
+}
+
+impl Environment {
+    pub fn system_world(&self) -> &SystemWorld {
+        &self.system
+    }
+
+    pub fn unit_world<'w>(&'w self, test: &'w UnitTest) -> UnitWorld<'w> {
+        UnitWorld {
+            system: &self.system,
+            project: &self.project,
+            test,
+            augmented_library: LazyHash::new(augmented_library(|b| b)),
+        }
+    }
+
+    pub fn template_world<'w>(&'w self, test: &'w TemplateTest) -> TemplateWorld<'w> {
+        TemplateWorld {
+            system: &self.system,
+            project: &self.project,
+            test,
+        }
+    }
+}
+
+/// A thin shim around the [`SystemWorld`] with functionality specific to unit
+/// tests.
+pub struct UnitWorld<'w> {
+    system: &'w SystemWorld,
+    project: &'w Project,
+    test: &'w UnitTest,
+    augmented_library: LazyHash<Library>,
+}
+
+impl World for UnitWorld<'_> {
+    fn library(&self) -> &LazyHash<Library> {
+        &self.augmented_library
+    }
+
+    fn book(&self) -> &LazyHash<FontBook> {
+        &self.system.book
+    }
+
+    fn main(&self) -> FileId {
+        panic!()
+    }
+
+    fn source(&self, id: FileId) -> FileResult<Source> {
+        self.system.slot(id, |slot| {
+            slot.source(self.project.root(), &self.system.package_storage)
+        })
+    }
+
+    fn file(&self, id: FileId) -> FileResult<Bytes> {
+        self.system.slot(id, |slot| {
+            slot.file(self.project.root(), &self.system.package_storage)
+        })
+    }
+
+    fn font(&self, index: usize) -> Option<Font> {
+        self.system.fonts[index].get()
+    }
+
+    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+        self.system.today(offset)
+    }
+}
+
+/// A thin shim around the [`SystemWorld`] with functionality specific to
+/// template tests.
+pub struct TemplateWorld<'w> {
+    system: &'w SystemWorld,
+    project: &'w Project,
+    test: &'w TemplateTest,
+}
+
+impl World for TemplateWorld<'_> {
+    fn library(&self) -> &LazyHash<Library> {
+        &self.system.library
+    }
+
+    fn book(&self) -> &LazyHash<FontBook> {
+        &self.system.book
+    }
+
+    fn main(&self) -> FileId {
+        panic!()
+    }
+
+    fn source(&self, id: FileId) -> FileResult<Source> {
+        let id = self.check_access(id);
+
+        self.system.slot(id, |slot| {
+            slot.source(
+                &self.project.template_root().unwrap(),
+                &self.system.package_storage,
+            )
+        })
+    }
+
+    fn file(&self, id: FileId) -> FileResult<Bytes> {
+        let id = self.check_access(id);
+
+        self.system.slot(id, |slot| {
+            slot.file(
+                &self.project.template_root().unwrap(),
+                &self.system.package_storage,
+            )
+        })
+    }
+
+    fn font(&self, index: usize) -> Option<Font> {
+        self.system.fonts[index].get()
+    }
+
+    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+        self.system.today(offset)
+    }
+}
 
 /// A world that provides access to the operating system.
 pub struct SystemWorld {
-    /// The working directory.
-    workdir: Option<PathBuf>,
-    /// The root relative to which absolute paths are resolved.
     root: PathBuf,
-    /// Typst's standard library.
+    workdir: Option<PathBuf>,
     library: LazyHash<Library>,
-    /// Metadata about discovered fonts.
     book: LazyHash<FontBook>,
-    /// Locations of and storage for lazily loaded fonts.
     fonts: Vec<FontSlot>,
-    /// Maps file ids to source files and buffers.
     slots: Mutex<HashMap<FileId, FileSlot>>,
-    /// Holds information about where packages are stored.
     package_storage: PackageStorage,
-    /// The current datetime if requested.
     now: DateTime<Utc>,
 }
 
@@ -50,8 +167,8 @@ impl SystemWorld {
         now: DateTime<Utc>,
     ) -> io::Result<Self> {
         Ok(Self {
-            workdir: std::env::current_dir().ok(),
             root,
+            workdir: std::env::current_dir().ok(),
             library: LazyHash::default(),
             book: LazyHash::new(fonts.book),
             fonts: fonts.fonts,
@@ -59,11 +176,6 @@ impl SystemWorld {
             package_storage,
             now,
         })
-    }
-
-    /// The root relative to which absolute paths are resolved.
-    pub fn root(&self) -> &Path {
-        &self.root
     }
 
     /// The current working directory.
@@ -84,34 +196,9 @@ impl SystemWorld {
         self.source(id)
             .expect("file id does not point to any source file")
     }
-}
 
-impl World for SystemWorld {
-    fn library(&self) -> &LazyHash<Library> {
-        &self.library
-    }
-
-    fn book(&self) -> &LazyHash<FontBook> {
-        &self.book
-    }
-
-    fn main(&self) -> FileId {
-        panic!("system world does not have a main file")
-    }
-
-    fn source(&self, id: FileId) -> FileResult<Source> {
-        self.slot(id, |slot| slot.source(&self.root, &self.package_storage))
-    }
-
-    fn file(&self, id: FileId) -> FileResult<Bytes> {
-        self.slot(id, |slot| slot.file(&self.root, &self.package_storage))
-    }
-
-    fn font(&self, index: usize) -> Option<Font> {
-        self.fonts[index].get()
-    }
-
-    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+    /// Returns the configured datetime used for compilation.
+    pub fn today(&self, offset: Option<i64>) -> Option<Datetime> {
         // The time with the specified UTC offset, or within the local time zone.
         let with_offset = match offset {
             None => self.now.with_timezone(&Local).fixed_offset(),
@@ -127,6 +214,27 @@ impl World for SystemWorld {
             with_offset.day().try_into().ok()?,
         )
     }
+
+    pub fn unit_world<'w>(&'w self, project: &'w Project, test: &'w UnitTest) -> UnitWorld<'w> {
+        UnitWorld {
+            system: self,
+            project,
+            test,
+            augmented_library: LazyHash::new(augmented_library(|b| b)),
+        }
+    }
+
+    pub fn template_world<'w>(
+        &'w self,
+        project: &'w Project,
+        test: &'w TemplateTest,
+    ) -> TemplateWorld<'w> {
+        TemplateWorld {
+            system: self,
+            project,
+            test,
+        }
+    }
 }
 
 impl SystemWorld {
@@ -137,6 +245,36 @@ impl SystemWorld {
     {
         let mut map = self.slots.lock().unwrap();
         f(map.entry(id).or_insert_with(|| FileSlot::new(id)))
+    }
+}
+
+impl World for SystemWorld {
+    fn library(&self) -> &LazyHash<Library> {
+        &self.library
+    }
+
+    fn book(&self) -> &LazyHash<FontBook> {
+        &self.book
+    }
+
+    fn main(&self) -> FileId {
+        panic!()
+    }
+
+    fn source(&self, id: FileId) -> FileResult<Source> {
+        self.slot(id, |slot| slot.source(&self.root, &self.package_storage))
+    }
+
+    fn file(&self, id: FileId) -> FileResult<Bytes> {
+        self.slot(id, |slot| slot.file(&self.root, &self.package_storage))
+    }
+
+    fn font(&self, index: usize) -> Option<Font> {
+        self.fonts[index].get()
+    }
+
+    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+        self.today(offset)
     }
 }
 
@@ -170,13 +308,9 @@ impl FileSlot {
     }
 
     /// Retrieve the source for this file.
-    fn source(
-        &mut self,
-        project_root: &Path,
-        package_storage: &PackageStorage,
-    ) -> FileResult<Source> {
+    fn source(&mut self, root: &Path, package_storage: &PackageStorage) -> FileResult<Source> {
         self.source.get_or_init(
-            || read(self.id, project_root, package_storage),
+            || read(self.id, root, package_storage),
             |data, prev| {
                 let text = decode_utf8(&data)?;
                 if let Some(mut prev) = prev {
@@ -190,9 +324,9 @@ impl FileSlot {
     }
 
     /// Retrieve the file's bytes.
-    fn file(&mut self, project_root: &Path, package_storage: &PackageStorage) -> FileResult<Bytes> {
+    fn file(&mut self, root: &Path, package_storage: &PackageStorage) -> FileResult<Bytes> {
         self.file.get_or_init(
-            || read(self.id, project_root, package_storage),
+            || read(self.id, root, package_storage),
             |data, _| Ok(Bytes::new(data)),
         )
     }
@@ -258,15 +392,11 @@ impl<T: Clone> SlotCell<T> {
 
 /// Resolves the path of a file id on the system, downloading a package if
 /// necessary.
-fn system_path(
-    project_root: &Path,
-    id: FileId,
-    package_storage: &PackageStorage,
-) -> FileResult<PathBuf> {
+fn system_path(root: &Path, id: FileId, package_storage: &PackageStorage) -> FileResult<PathBuf> {
     // Determine the root path relative to which the file path
     // will be resolved.
     let buf;
-    let mut root = project_root;
+    let mut root = root;
     if let Some(spec) = id.package() {
         tracing::trace!(?spec, "preparing package");
         buf = package_storage.prepare_package(spec, &mut ProgressSink)?;
@@ -282,8 +412,8 @@ fn system_path(
 ///
 /// If the ID represents stdin it will read from standard input,
 /// otherwise it gets the file path of the ID and reads the file from disk.
-fn read(id: FileId, project_root: &Path, package_storage: &PackageStorage) -> FileResult<Vec<u8>> {
-    read_from_disk(&system_path(project_root, id, package_storage)?)
+fn read(id: FileId, root: &Path, package_storage: &PackageStorage) -> FileResult<Vec<u8>> {
+    read_from_disk(&system_path(root, id, package_storage)?)
 }
 
 /// Read a file from disk.
@@ -319,7 +449,7 @@ impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
         } else {
             // Try to express the path relative to the working directory.
             vpath
-                .resolve(self.root())
+                .resolve(&self.root)
                 // .and_then(|abs| pathdiff::diff_paths(abs, self.workdir()))
                 // .as_deref()
                 .unwrap_or_else(|| vpath.as_rootless_path().to_path_buf())

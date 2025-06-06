@@ -393,11 +393,11 @@ impl UnitTestRunner<'_, '_, '_> {
     fn compile_inner(&mut self, source: Source, is_reference: bool) -> eyre::Result<PagedDocument> {
         let Warned { output, warnings } = compile::compile(
             source,
-            self.project_runner.world,
+            &self
+                .project_runner
+                .world
+                .unit_world(self.project_runner.project, self.test),
             self.project_runner.config.warnings,
-            // NOTE(tinger): We only use augmentation here because package
-            // rerouting should not happen for unit tests.
-            |w| w.augment_standard_library(true),
         );
 
         self.result.set_warnings(warnings);
@@ -570,18 +570,11 @@ impl TemplateTestRunner<'_, '_, '_> {
     pub fn compile_template(&mut self, source: Source) -> eyre::Result<PagedDocument> {
         let Warned { output, warnings } = compile::compile(
             source,
-            self.project_runner.world,
+            &self
+                .project_runner
+                .world
+                .template_world(self.project_runner.project, self.test),
             self.project_runner.config.warnings,
-            |w| {
-                w.reroute_package(self.project_runner.project.package_spec())
-                    .root_prefix(
-                        self.project_runner
-                            .project
-                            .manifest()
-                            .and_then(|m| m.template.as_ref())
-                            .map(|t| t.path.as_str().into()),
-                    )
-            },
         );
 
         self.result.set_warnings(warnings);
