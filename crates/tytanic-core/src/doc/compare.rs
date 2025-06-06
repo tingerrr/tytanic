@@ -3,6 +3,7 @@
 //! This currently only provies a single primitive comparison algorithm,
 //! [`Strategy::Simple`].
 
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 
 use thiserror::Error;
@@ -81,16 +82,29 @@ fn page_simple(
         });
     }
 
-    let deviations = Iterator::zip(output.pixels().iter(), reference.pixels().iter())
-        .filter(|(a, b)| {
-            u8::abs_diff(a.red(), b.red()) > max_delta
-                || u8::abs_diff(a.green(), b.green()) > max_delta
-                || u8::abs_diff(a.blue(), b.blue()) > max_delta
-                || u8::abs_diff(a.alpha(), b.alpha()) > max_delta
-        })
-        .count();
+    let mut deviations = BTreeMap::new();
+    let mut count = 0;
 
-    if deviations > max_deviation {
+    for (a, b) in std::iter::zip(output.pixels(), reference.pixels()) {
+        let r_delta = u8::abs_diff(a.red(), b.red());
+        let g_delta = u8::abs_diff(a.green(), b.green());
+        let b_delta = u8::abs_diff(a.blue(), b.blue());
+        let a_delta = u8::abs_diff(a.alpha(), b.alpha());
+
+        if r_delta > max_delta || g_delta > max_delta || b_delta > max_delta || a_delta > max_delta
+        {
+            count += 1;
+        }
+
+        let abs_diff =
+            u16::from(r_delta) + u16::from(g_delta) + u16::from(b_delta) + u16::from(a_delta);
+
+        if abs_diff > 0 {
+            *deviations.entry(abs_diff).or_default() += 1;
+        }
+    }
+
+    if count > max_deviation {
         return Err(PageError::SimpleDeviations { deviations });
     }
 
@@ -152,15 +166,13 @@ pub enum PageError {
     },
 
     /// The pages differed according to [`Strategy::Simple`].
-    #[error(
-        "content differed in at least {} {}",
-        deviations,
-        Term::simple("pixel").with(*deviations)
-    )]
+    #[error("content differed")]
     SimpleDeviations {
-        /// The amount of visual deviations, i.e. the amount of pixels which did
-        /// not match according to the visual strategy.
-        deviations: usize,
+        /// A simple histogram of deviations, the keys represent the absolute
+        /// difference per pixel and the values the amount of pixels that
+        /// differed by that much. This means that this histogram contains only
+        /// keys below `255 * 3`.
+        deviations: BTreeMap<u16, usize>,
     },
 }
 
@@ -214,6 +226,10 @@ mod tests {
     #[test]
     fn test_page_simple_above_max_devitation() {
         let [a, b] = images();
+        let mut expected = BTreeMap::new();
+
+        expected.insert(256, 4);
+
         assert!(matches!(
             page(
                 &a,
@@ -223,7 +239,7 @@ mod tests {
                     max_deviation: 0,
                 },
             ),
-            Err(PageError::SimpleDeviations { deviations: 4 })
+            Err(PageError::SimpleDeviations { deviations }) if deviations == expected
         ))
     }
 }
