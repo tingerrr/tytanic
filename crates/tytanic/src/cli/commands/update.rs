@@ -88,7 +88,7 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
         eyre::bail!(OperationFailure);
     }
 
-    let world = ctx.world(&args.compile)?;
+    let providers = ctx.providers(&project, &ctx.args.package, &ctx.args.font, &args.compile)?;
 
     let origin = match args
         .export
@@ -115,7 +115,7 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
     let runner = Runner::new(
         &project,
         &suite,
-        &world,
+        &providers,
         RunnerConfig {
             warnings: args.compile.warnings.into_native(),
             optimize: args.export.optimize_refs.get_or_default(),
@@ -138,7 +138,7 @@ pub fn run(ctx: &mut Context, args: &Args) -> eyre::Result<()> {
 
     let reporter = Reporter::new(
         ctx.ui,
-        &world,
+        &providers,
         ctx.ui.can_live_report() && ctx.args.output.verbose == 0,
     );
     let result = runner.run(&reporter)?;

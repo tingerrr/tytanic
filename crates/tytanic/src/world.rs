@@ -5,375 +5,231 @@
 
 // TODO(tinger): Upstream this to typst-kit.
 
-use std::collections::HashMap;
-use std::fs;
-use std::io;
-use std::mem;
-use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
-use chrono::DateTime;
-use chrono::Datelike;
-use chrono::FixedOffset;
-use chrono::Local;
-use chrono::Utc;
-use typst::diag::FileError;
-use typst::diag::FileResult;
-use typst::foundations::Bytes;
-use typst::foundations::Datetime;
 use typst::syntax::FileId;
-use typst::syntax::Source;
-use typst::text::Font;
-use typst::text::FontBook;
-use typst::utils::LazyHash;
-use typst::Library;
-use typst::World;
-use typst_kit::download::ProgressSink;
-use typst_kit::fonts::FontSlot;
-use typst_kit::fonts::Fonts;
+use typst_kit::download::Downloader;
+use typst_kit::fonts::FontSearcher;
 use typst_kit::package::PackageStorage;
+use typst_syntax::package::PackageSpec;
+use typst_syntax::VirtualPath;
+use tytanic_core::library::augmented_default_library;
+use tytanic_core::world_builder::datetime::FixedDateProvider;
+use tytanic_core::world_builder::file::FilesystemFileProvider;
+use tytanic_core::world_builder::font::FilesystemFontProvider;
+use tytanic_core::world_builder::library::LibraryProvider;
+use tytanic_core::world_builder::ComposedWorld;
+use tytanic_core::world_builder::ProvideDatetime;
+use tytanic_core::world_builder::ProvideFile;
+use tytanic_core::world_builder::ProvideFont;
+use tytanic_core::world_builder::ProvideLibrary;
+use tytanic_core::world_builder::TemplateFileProviderShim;
+use tytanic_core::Project;
+use tytanic_core::TemplateTest;
+use tytanic_core::UnitTest;
 
-/// A world that provides access to the operating system.
-pub struct SystemWorld {
-    /// The working directory.
-    workdir: Option<PathBuf>,
-    /// The root relative to which absolute paths are resolved.
-    root: PathBuf,
-    /// Typst's standard library.
-    library: LazyHash<Library>,
-    /// Metadata about discovered fonts.
-    book: LazyHash<FontBook>,
-    /// Locations of and storage for lazily loaded fonts.
-    fonts: Vec<FontSlot>,
-    /// Maps file ids to source files and buffers.
-    slots: Mutex<HashMap<FileId, FileSlot>>,
-    /// Holds information about where packages are stored.
-    package_storage: PackageStorage,
-    /// The current date-time if requested.
-    now: DateTime<Utc>,
+use crate::cli::commands::CompileOptions;
+use crate::cli::commands::FontOptions;
+use crate::cli::commands::PackageOptions;
+use crate::cli::commands::Switch;
+
+#[tracing::instrument]
+fn package_storage(package_opts: &PackageOptions) -> PackageStorage {
+    let agent = format!("{}/{}", tytanic_core::TOOL_NAME, env!("CARGO_PKG_VERSION"));
+
+    let downloader = match package_opts.certificate.clone() {
+        Some(path) => Downloader::with_path(agent, path),
+        None => Downloader::new(agent),
+    };
+
+    PackageStorage::new(
+        package_opts.package_cache_path.clone(),
+        package_opts.package_path.clone(),
+        downloader,
+    )
 }
 
-impl SystemWorld {
-    /// Create a new system world.
+/// A file provider which is rooted at a project's root and provides access to
+/// all files in that project as well as access to packages on demand.
+#[tracing::instrument(skip(project))]
+pub fn project_file_provider(
+    project: &Project,
+    package_opts: &PackageOptions,
+) -> Box<dyn ProvideFile> {
+    Box::new(FilesystemFileProvider::new(
+        project.root(),
+        Some(package_storage(package_opts)),
+    )) as _
+}
+
+/// Provides access as if in a freshly created template from the given template
+/// package project.
+///
+/// This means that only files within the template root can be accessed, not
+/// the whole project. Additionally, imports to packages matching the current
+/// template project's version and name in the `preview` namespace are routed
+/// to the current package and are subject to the same access rules as a normal
+/// package.
+///
+/// Panics if the project has no manifest.
+#[tracing::instrument(skip(project))]
+pub fn template_file_provider(
+    project: &Project,
+    package_opts: &PackageOptions,
+) -> Box<dyn ProvideFile> {
+    let manifest = project.manifest().unwrap();
+
+    let spec = PackageSpec {
+        namespace: "preview".into(),
+        name: manifest.package.name.clone(),
+        version: manifest.package.version,
+    };
+
+    Box::new(TemplateFileProviderShim::new(
+        FilesystemFileProvider::new(project.root(), Some(package_storage(package_opts))),
+        FilesystemFileProvider::new(
+            project.template_root().unwrap(),
+            Some(package_storage(package_opts)),
+        ),
+        spec,
+    )) as _
+}
+
+/// A font provider that provides embedded and system fonts.
+#[tracing::instrument]
+pub fn font_provider(font_opts: &FontOptions) -> Box<dyn ProvideFont> {
+    let mut searcher = FontSearcher::new();
+
+    #[cfg(feature = "embed-fonts")]
+    searcher.include_embedded_fonts(font_opts.use_embedded_fonts.get_or_default());
+    searcher.include_system_fonts(font_opts.use_system_fonts.get_or_default());
+
+    let fonts = searcher.search_with(font_opts.font_paths.iter().map(PathBuf::as_path));
+
+    tracing::debug!(fonts = ?fonts.fonts.len(), "collected fonts");
+    Box::new(FilesystemFontProvider::from_searcher(fonts))
+}
+
+/// A datetime provider that provides a fixed date.
+#[tracing::instrument]
+pub fn datetime_provider(compile_opts: &CompileOptions) -> Box<dyn ProvideDatetime> {
+    Box::new(FixedDateProvider::new(compile_opts.timestamp)) as _
+}
+
+/// A library providers that provides the augmented library.
+#[tracing::instrument]
+pub fn augmented_library_provider() -> Box<dyn ProvideLibrary> {
+    Box::new(LibraryProvider::with_library(augmented_default_library())) as _
+}
+
+/// A library providers that provides the default library.
+#[tracing::instrument]
+pub fn default_library_provider() -> Box<dyn ProvideLibrary> {
+    Box::new(LibraryProvider::new()) as _
+}
+
+/// A set of providers used to construct worlds.
+pub struct Providers {
+    augmented_library: Box<dyn ProvideLibrary>,
+    default_library: Box<dyn ProvideLibrary>,
+    project_files: Box<dyn ProvideFile>,
+    template_files: Option<Box<dyn ProvideFile>>,
+    fonts: Box<dyn ProvideFont>,
+    datetime: Box<dyn ProvideDatetime>,
+}
+
+impl Providers {
     pub fn new(
-        root: PathBuf,
-        fonts: Fonts,
-        package_storage: PackageStorage,
-        now: DateTime<Utc>,
-    ) -> io::Result<Self> {
-        Ok(Self {
-            workdir: std::env::current_dir().ok(),
-            root,
-            library: LazyHash::default(),
-            book: LazyHash::new(fonts.book),
-            fonts: fonts.fonts,
-            slots: Mutex::new(HashMap::new()),
-            package_storage,
-            now,
-        })
-    }
-
-    /// The root relative to which absolute paths are resolved.
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
-
-    /// The current working directory.
-    pub fn workdir(&self) -> &Path {
-        self.workdir.as_deref().unwrap_or(Path::new("."))
-    }
-
-    /// Reset the compilation state in preparation of a new compilation.
-    pub fn reset(&mut self) {
-        for slot in self.slots.get_mut().unwrap().values_mut() {
-            slot.reset();
+        project: &Project,
+        package_opts: &PackageOptions,
+        font_opts: &FontOptions,
+        compile_opts: &CompileOptions,
+    ) -> Self {
+        Self {
+            augmented_library: augmented_library_provider(),
+            default_library: default_library_provider(),
+            project_files: project_file_provider(project, package_opts),
+            template_files: project.manifest().and_then(|m| {
+                m.template
+                    .is_some()
+                    .then(|| template_file_provider(project, package_opts))
+            }),
+            fonts: font_provider(font_opts),
+            datetime: datetime_provider(compile_opts),
         }
     }
-
-    /// Lookup a source file by id.
-    #[track_caller]
-    pub fn lookup(&self, id: FileId) -> Source {
-        self.source(id)
-            .expect("file id does not point to any source file")
-    }
 }
 
-impl World for SystemWorld {
-    fn library(&self) -> &LazyHash<Library> {
-        &self.library
+impl Providers {
+    /// Constructs a world for unit test creation.
+    pub fn system_world(&self, id: FileId) -> ComposedWorld<'_> {
+        ComposedWorld::builder()
+            .library_provider(&*self.augmented_library)
+            .file_provider(&*self.project_files)
+            .font_provider(&*self.fonts)
+            .datetime_provider(&*self.datetime)
+            .build(id)
     }
 
-    fn book(&self) -> &LazyHash<FontBook> {
-        &self.book
-    }
-
-    fn main(&self) -> FileId {
-        panic!("system world does not have a main file")
-    }
-
-    fn source(&self, id: FileId) -> FileResult<Source> {
-        self.slot(id, |slot| slot.source(&self.root, &self.package_storage))
-    }
-
-    fn file(&self, id: FileId) -> FileResult<Bytes> {
-        self.slot(id, |slot| slot.file(&self.root, &self.package_storage))
-    }
-
-    fn font(&self, index: usize) -> Option<Font> {
-        self.fonts[index].get()
-    }
-
-    fn today(&self, offset: Option<i64>) -> Option<Datetime> {
-        // The time with the specified UTC offset, or within the local time zone.
-        let with_offset = match offset {
-            None => self.now.with_timezone(&Local).fixed_offset(),
-            Some(hours) => {
-                let seconds = i32::try_from(hours).ok()?.checked_mul(3600)?;
-                self.now.with_timezone(&FixedOffset::east_opt(seconds)?)
-            }
+    /// Constructs a world for unit tests.
+    pub fn unit_world<'w>(
+        &'w self,
+        project: &Project,
+        test: &'w UnitTest,
+        is_ref: bool,
+    ) -> ComposedWorld<'w> {
+        // TODO(tinger): Implement more fail safe path handling to ensure we
+        // don't use absolute paths here.
+        let path = if is_ref {
+            project.unit_test_ref_script(test.id())
+        } else {
+            project.unit_test_script(test.id())
         };
 
-        Datetime::from_ymd(
-            with_offset.year(),
-            with_offset.month().try_into().ok()?,
-            with_offset.day().try_into().ok()?,
-        )
-    }
-}
+        let prefix = project.root();
 
-impl SystemWorld {
-    /// Access the canonical slot for the given file id.
-    fn slot<F, T>(&self, id: FileId, f: F) -> T
-    where
-        F: FnOnce(&mut FileSlot) -> T,
-    {
-        let mut map = self.slots.lock().unwrap();
-        f(map.entry(id).or_insert_with(|| FileSlot::new(id)))
-    }
-}
+        let id = FileId::new(
+            None,
+            VirtualPath::new(
+                path.strip_prefix(prefix)
+                    .expect("tests are in project root"),
+            ),
+        );
 
-/// Holds the processed data for a file ID.
-///
-/// Both fields can be populated if the file is both imported and read().
-struct FileSlot {
-    /// The slot's file id.
-    id: FileId,
-    /// The lazily loaded and incrementally updated source file.
-    source: SlotCell<Source>,
-    /// The lazily loaded raw byte buffer.
-    file: SlotCell<Bytes>,
-}
-
-impl FileSlot {
-    /// Create a new file slot.
-    fn new(id: FileId) -> Self {
-        Self {
-            id,
-            file: SlotCell::new(),
-            source: SlotCell::new(),
-        }
+        ComposedWorld::builder()
+            .library_provider(&*self.augmented_library)
+            .file_provider(&*self.project_files)
+            .font_provider(&*self.fonts)
+            .datetime_provider(&*self.datetime)
+            .build(id)
     }
 
-    /// Marks the file as not yet accessed in preparation of the next
-    /// compilation.
-    fn reset(&mut self) {
-        self.source.reset();
-        self.file.reset();
-    }
+    /// Constructs a world for template tests.
+    ///
+    /// Panics if the project has no manifest.
+    pub fn template_world<'w>(
+        &'w self,
+        project: &Project,
+        _test: &'w TemplateTest,
+    ) -> ComposedWorld<'w> {
+        // TODO(tinger): Implement more fail safe path handling to ensure we
+        // don't use absolute paths here.
+        let prefix = project.template_root().unwrap();
+        let entrypoint = project.template_entrypoint().unwrap();
+        let id = FileId::new(
+            None,
+            VirtualPath::new(
+                entrypoint
+                    .strip_prefix(prefix)
+                    .expect("entrypoint is created with template root"),
+            ),
+        );
 
-    /// Retrieve the source for this file.
-    fn source(
-        &mut self,
-        project_root: &Path,
-        package_storage: &PackageStorage,
-    ) -> FileResult<Source> {
-        self.source.get_or_init(
-            || read(self.id, project_root, package_storage),
-            |data, prev| {
-                let text = decode_utf8(&data)?;
-                if let Some(mut prev) = prev {
-                    prev.replace(text);
-                    Ok(prev)
-                } else {
-                    Ok(Source::new(self.id, text.into()))
-                }
-            },
-        )
-    }
-
-    /// Retrieve the file's bytes.
-    fn file(&mut self, project_root: &Path, package_storage: &PackageStorage) -> FileResult<Bytes> {
-        self.file.get_or_init(
-            || read(self.id, project_root, package_storage),
-            |data, _| Ok(Bytes::new(data)),
-        )
-    }
-}
-
-/// Lazily processes data for a file.
-struct SlotCell<T> {
-    /// The processed data.
-    data: Option<FileResult<T>>,
-    /// A hash of the raw file contents / access error.
-    fingerprint: u128,
-    /// Whether the slot has been accessed in the current compilation.
-    accessed: bool,
-}
-
-impl<T: Clone> SlotCell<T> {
-    /// Creates a new, empty cell.
-    fn new() -> Self {
-        Self {
-            data: None,
-            fingerprint: 0,
-            accessed: false,
-        }
-    }
-
-    /// Marks the cell as not yet accessed in preparation of the next
-    /// compilation.
-    fn reset(&mut self) {
-        self.accessed = false;
-    }
-
-    /// Gets the contents of the cell or initialize them.
-    fn get_or_init(
-        &mut self,
-        load: impl FnOnce() -> FileResult<Vec<u8>>,
-        f: impl FnOnce(Vec<u8>, Option<T>) -> FileResult<T>,
-    ) -> FileResult<T> {
-        // If we accessed the file already in this compilation, retrieve it.
-        if mem::replace(&mut self.accessed, true) {
-            if let Some(data) = &self.data {
-                return data.clone();
-            }
-        }
-
-        // Read and hash the file.
-        let result = load();
-        let fingerprint = typst::utils::hash128(&result);
-
-        // If the file contents didn't change, yield the old processed data.
-        if mem::replace(&mut self.fingerprint, fingerprint) == fingerprint {
-            if let Some(data) = &self.data {
-                return data.clone();
-            }
-        }
-
-        let prev = self.data.take().and_then(Result::ok);
-        let value = result.and_then(|data| f(data, prev));
-        self.data = Some(value.clone());
-
-        value
-    }
-}
-
-/// Resolves the path of a file id on the system, downloading a package if
-/// necessary.
-fn system_path(
-    project_root: &Path,
-    id: FileId,
-    package_storage: &PackageStorage,
-) -> FileResult<PathBuf> {
-    // Determine the root path relative to which the file path
-    // will be resolved.
-    let buf;
-    let mut root = project_root;
-    if let Some(spec) = id.package() {
-        tracing::trace!(?spec, "preparing package");
-        buf = package_storage.prepare_package(spec, &mut ProgressSink)?;
-        root = &buf;
-    }
-
-    // Join the path to the root. If it tries to escape, deny
-    // access. Note: It can still escape via symlinks.
-    id.vpath().resolve(root).ok_or(FileError::AccessDenied)
-}
-
-/// Reads a file from a `FileId`.
-///
-/// If the ID represents stdin it will read from standard input,
-/// otherwise it gets the file path of the ID and reads the file from disk.
-fn read(id: FileId, project_root: &Path, package_storage: &PackageStorage) -> FileResult<Vec<u8>> {
-    read_from_disk(&system_path(project_root, id, package_storage)?)
-}
-
-/// Read a file from disk.
-fn read_from_disk(path: &Path) -> FileResult<Vec<u8>> {
-    let f = |e| FileError::from_io(e, path);
-    if fs::metadata(path).map_err(f)?.is_dir() {
-        Err(FileError::IsDirectory)
-    } else {
-        fs::read(path).map_err(f)
-    }
-}
-
-/// Decode UTF-8 with an optional byte order mark (BOM).
-fn decode_utf8(buf: &[u8]) -> FileResult<&str> {
-    // Remove UTF-8 BOM.
-    Ok(std::str::from_utf8(
-        buf.strip_prefix(b"\xef\xbb\xbf").unwrap_or(buf),
-    )?)
-}
-
-type CodespanResult<T> = Result<T, CodespanError>;
-type CodespanError = codespan_reporting::files::Error;
-
-impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
-    type FileId = FileId;
-    type Name = String;
-    type Source = Source;
-
-    fn name(&'a self, id: FileId) -> CodespanResult<Self::Name> {
-        let vpath = id.vpath();
-        Ok(if let Some(package) = id.package() {
-            format!("{package}{}", vpath.as_rooted_path().display())
-        } else {
-            // Try to express the path relative to the working directory.
-            vpath
-                .resolve(self.root())
-                // .and_then(|abs| pathdiff::diff_paths(abs, self.workdir()))
-                // .as_deref()
-                .unwrap_or_else(|| vpath.as_rootless_path().to_path_buf())
-                .to_string_lossy()
-                .into()
-        })
-    }
-
-    fn source(&'a self, id: FileId) -> CodespanResult<Self::Source> {
-        Ok(self.lookup(id))
-    }
-
-    fn line_index(&'a self, id: FileId, given: usize) -> CodespanResult<usize> {
-        let source = self.lookup(id);
-        source
-            .byte_to_line(given)
-            .ok_or_else(|| CodespanError::IndexTooLarge {
-                given,
-                max: source.len_bytes(),
-            })
-    }
-
-    fn line_range(&'a self, id: FileId, given: usize) -> CodespanResult<std::ops::Range<usize>> {
-        let source = self.lookup(id);
-        source
-            .line_to_range(given)
-            .ok_or_else(|| CodespanError::LineTooLarge {
-                given,
-                max: source.len_lines(),
-            })
-    }
-
-    fn column_number(&'a self, id: FileId, _: usize, given: usize) -> CodespanResult<usize> {
-        let source = self.lookup(id);
-        source.byte_to_column(given).ok_or_else(|| {
-            let max = source.len_bytes();
-            if given <= max {
-                CodespanError::InvalidCharBoundary { given }
-            } else {
-                CodespanError::IndexTooLarge { given, max }
-            }
-        })
+        ComposedWorld::builder()
+            .library_provider(&*self.default_library)
+            .file_provider(&**self.template_files.as_ref().unwrap())
+            .font_provider(&*self.fonts)
+            .datetime_provider(&*self.datetime)
+            .build(id)
     }
 }

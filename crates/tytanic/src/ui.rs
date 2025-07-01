@@ -24,12 +24,12 @@ use termcolor::StandardStreamLock;
 use termcolor::WriteColor;
 use typst::diag::Severity;
 use typst::diag::SourceDiagnostic;
+use typst::World;
 use typst::WorldExt;
 use typst_syntax::FileId;
+use typst_syntax::Source;
 use typst_syntax::Span;
 use tytanic_core::test::Id;
-
-use crate::world::SystemWorld;
 
 #[macro_export]
 macro_rules! cwrite {
@@ -357,11 +357,11 @@ pub fn write_test_id(mut w: &mut dyn WriteColor, id: &Id) -> io::Result<()> {
 pub fn write_diagnostics(
     w: &mut dyn WriteColor,
     diagnostic_config: &term::Config,
-    world: &SystemWorld,
+    world: &dyn World,
     warnings: &[SourceDiagnostic],
     errors: &[SourceDiagnostic],
 ) -> eyre::Result<()> {
-    fn resolve_label(world: &SystemWorld, span: Span) -> Option<Label<FileId>> {
+    fn resolve_label(world: &dyn World, span: Span) -> Option<Label<FileId>> {
         Some(Label::primary(span.id()?, world.range(span)?))
     }
 
@@ -380,7 +380,7 @@ pub fn write_diagnostics(
         )
         .with_labels(resolve_label(world, diagnostic.span).into_iter().collect());
 
-        term::emit(w, diagnostic_config, world, &diag)?;
+        term::emit(w, diagnostic_config, &WorldShim(world), &diag)?;
 
         // Stacktrace-like helper diagnostics.
         for point in &diagnostic.trace {
@@ -389,11 +389,81 @@ pub fn write_diagnostics(
                 .with_message(message)
                 .with_labels(resolve_label(world, point.span).into_iter().collect());
 
-            term::emit(w, diagnostic_config, world, &help)?;
+            term::emit(w, diagnostic_config, &WorldShim(world), &help)?;
         }
     }
 
     Ok(())
+}
+
+struct WorldShim<'w>(&'w dyn World);
+
+impl WorldShim<'_> {
+    fn lookup(&self, id: FileId) -> Source {
+        self.0.source(id).unwrap()
+    }
+}
+
+type CodespanResult<T> = Result<T, CodespanError>;
+type CodespanError = codespan_reporting::files::Error;
+
+impl<'a> codespan_reporting::files::Files<'a> for WorldShim<'_> {
+    type FileId = FileId;
+    type Name = String;
+    type Source = Source;
+
+    fn name(&'a self, id: FileId) -> CodespanResult<Self::Name> {
+        let vpath = id.vpath();
+        Ok(if let Some(package) = id.package() {
+            format!("{package}{}", vpath.as_rooted_path().display())
+        } else {
+            // Try to express the path relative to the working directory.
+            vpath
+                // .resolve(&self.root)
+                // .and_then(|abs| pathdiff::diff_paths(abs, self.workdir()))
+                // .as_deref()
+                // .unwrap_or_else(|| vpath.as_rootless_path().to_path_buf())
+                .as_rooted_path()
+                .to_string_lossy()
+                .into()
+        })
+    }
+
+    fn source(&'a self, id: FileId) -> CodespanResult<Self::Source> {
+        Ok(self.lookup(id))
+    }
+
+    fn line_index(&'a self, id: FileId, given: usize) -> CodespanResult<usize> {
+        let source = self.lookup(id);
+        source
+            .byte_to_line(given)
+            .ok_or_else(|| CodespanError::IndexTooLarge {
+                given,
+                max: source.len_bytes(),
+            })
+    }
+
+    fn line_range(&'a self, id: FileId, given: usize) -> CodespanResult<std::ops::Range<usize>> {
+        let source = self.lookup(id);
+        source
+            .line_to_range(given)
+            .ok_or_else(|| CodespanError::LineTooLarge {
+                given,
+                max: source.len_lines(),
+            })
+    }
+
+    fn column_number(&'a self, id: FileId, _: usize, given: usize) -> CodespanResult<usize> {
+        let source = self.lookup(id);
+        source.byte_to_column(given).ok_or_else(|| {
+            let max = source.len_bytes();
+            if given <= max {
+                CodespanError::InvalidCharBoundary { given }
+            } else {
+                CodespanError::IndexTooLarge { given, max }
+            }
+        })
+    }
 }
 
 /// Writes content with some styles, this does not implement [`WriteColor`]

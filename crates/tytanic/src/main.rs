@@ -27,7 +27,6 @@ use crate::ui::Ui;
 
 mod cli;
 mod json;
-mod kit;
 mod report;
 mod runner;
 mod ui;

@@ -12,13 +12,14 @@ use tytanic_core::suite::SuiteResult;
 use tytanic_core::test::Stage;
 use tytanic_core::test::Test;
 use tytanic_core::test::TestResult;
+use tytanic_core::Project;
 use tytanic_utils::fmt::Term;
 
 use crate::cwrite;
 use crate::ui;
 use crate::ui::CWrite;
 use crate::ui::Ui;
-use crate::world::SystemWorld;
+use crate::world::Providers;
 
 /// The padding to use for annotations while test run reporting.
 const RUN_ANNOT_PADDING: usize = 10;
@@ -26,14 +27,18 @@ const RUN_ANNOT_PADDING: usize = 10;
 /// A reporter for test output and test run status reporting.
 pub struct Reporter<'ui, 'p> {
     ui: &'ui Ui,
-    world: &'p SystemWorld,
+    providers: &'p Providers,
 
     live: bool,
 }
 
 impl<'ui, 'p> Reporter<'ui, 'p> {
-    pub fn new(ui: &'ui Ui, world: &'p SystemWorld, live: bool) -> Self {
-        Self { ui, world, live }
+    pub fn new(ui: &'ui Ui, providers: &'p Providers, live: bool) -> Self {
+        Self {
+            ui,
+            providers,
+            live,
+        }
     }
 }
 
@@ -212,7 +217,12 @@ impl Reporter<'_, '_> {
     }
 
     /// Report a test result and show supplementary information.
-    pub fn report_test_result(&self, test: &Test, result: &TestResult) -> eyre::Result<()> {
+    pub fn report_test_result(
+        &self,
+        project: &Project,
+        test: &Test,
+        result: &TestResult,
+    ) -> eyre::Result<()> {
         let (annot, color) = match result.stage() {
             Stage::Skipped => ("skip", Color::Yellow),
             Stage::Filtered => ("filter", Color::Yellow),
@@ -234,10 +244,15 @@ impl Reporter<'_, '_> {
         ui::write_test_id(&mut w, test.id())?;
         writeln!(w)?;
 
+        let world = match test {
+            Test::Unit(test) => self.providers.unit_world(project, test, false),
+            Test::Template(test) => self.providers.template_world(project, test),
+        };
+
         ui::write_diagnostics(
             &mut w,
             self.ui.diagnostic_config(),
-            self.world,
+            &world,
             result.warnings(),
             result.errors().unwrap_or_default(),
         )?;
